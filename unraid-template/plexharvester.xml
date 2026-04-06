@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <Container version="1">
   <Name>PlexHarvester</Name>
-  <Repository>misterk-qc/plexharvester:latest</Repository>
-  <Registry>https://hub.docker.com/r/misterk-qc/plexharvester</Registry>
+  <Repository>misterkqc/plexharvester:latest</Repository>
+  <Registry>https://hub.docker.com/r/misterkqc/plexharvester</Registry>
   <Network>bridge</Network>
   <Shell>bash</Shell>
   <Privileged>false</Privileged>
