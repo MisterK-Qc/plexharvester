@@ -2,8 +2,8 @@
 
 **PlexHarvester** is a self-hosted web application that compares your local Plex library against shared remote servers, indexes FTP sources for automatic downloading, and manages MKV audio tracks — all from a clean web interface.
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/misterkqc/plexharvester)](https://hub.docker.com/r/misterkqc/plexharvester)
-[![Docker Image Size](https://img.shields.io/docker/image-size/misterkqc/plexharvester/latest)](https://hub.docker.com/r/misterkqc/plexharvester)
+[![Docker Pulls](https://img.shields.io/docker/pulls/misterk-qc/plexharvester)](https://hub.docker.com/r/misterk-qc/plexharvester)
+[![Docker Image Size](https://img.shields.io/docker/image-size/misterk-qc/plexharvester/latest)](https://hub.docker.com/r/misterk-qc/plexharvester)
 [![GitHub release](https://img.shields.io/github/v/release/MisterK-Qc/plexharvester)](https://github.com/MisterK-Qc/plexharvester/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -28,7 +28,7 @@
 ```yaml
 services:
   plexharvester:
-    image: misterkqc/plexharvester:latest
+    image: misterk-qc/plexharvester:latest
     container_name: plexharvester
     ports:
       - "5000:5000"
@@ -52,7 +52,7 @@ docker run -d \
   -e TZ="America/Montreal" \
   -v /mnt/user/appdata/plexharvester:/config \
   --restart unless-stopped \
-  misterkqc/plexharvester:latest
+  misterk-qc/plexharvester:latest
 ```
 
 ---
