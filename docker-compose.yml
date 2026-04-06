@@ -1,6 +1,6 @@
 services:
   plexharvester:
-    image: DOCKERHUB_USERNAME/plexharvester:latest
+    image: misterkqc/plexharvester:latest
     container_name: plexharvester
     ports:
       - "5000:5000"
