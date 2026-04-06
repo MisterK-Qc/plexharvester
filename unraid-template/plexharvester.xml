@@ -18,7 +18,7 @@
 
   <Config Name="Config Directory" Target="/config" Default="/mnt/user/appdata/plexharvester" Mode="rw" Description="Persistent storage for configuration, cache, and logs." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/plexharvester</Config>
 
-  <Config Name="SECRET_KEY" Target="SECRET_KEY" Default="" Mode="" Description="Flask secret key for session security. Generate a strong random string (e.g. run: openssl rand -hex 32)." Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="SECRET_KEY" Target="SECRET_KEY" Default="" Mode="" Description="Flask secret key for session security. If left empty, a key is auto-generated and saved to /config/secret_key.txt on first start." Type="Variable" Display="always" Required="false" Mask="true"></Config>
 
   <Config Name="Timezone" Target="TZ" Default="America/Montreal" Mode="" Description="Container timezone (e.g. America/New_York, Europe/Paris)." Type="Variable" Display="always" Required="false" Mask="false">America/Montreal</Config>
 

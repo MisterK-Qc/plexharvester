@@ -90,7 +90,7 @@ Then: **Docker → Add Container** → select **PlexHarvester** under *User Temp
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SECRET_KEY` | **Yes** | — | Flask secret key used to sign and encrypt session cookies (Plex token, selected server). Any long random string works. Generate one: `openssl rand -hex 32` |
+| `SECRET_KEY` | No | *(auto-generated)* | Flask secret key used to sign and encrypt session cookies. If not set, a key is auto-generated on first start and saved to `/config/secret_key.txt`. |
 | `TZ` | No | `America/Montreal` | Container timezone |
 | `PLEX_COMPARE_CONFIG_DIR` | No | `/config` | Internal config directory (do not change) |
 
