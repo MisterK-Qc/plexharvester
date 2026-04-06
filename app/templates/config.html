@@ -1,0 +1,1370 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t("config.title") }}{% endblock %}
+{% block body_class %}page-config{% endblock %}
+
+{% block head %}
+<style>
+/* ── Config columns layout ──────────────────────────────────────────────── */
+.config-columns {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+.config-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.config-col.col-drag-over {
+  outline: 2px dashed var(--accent, #e5a00d);
+  border-radius: 8px;
+  outline-offset: 4px;
+}
+@media (max-width: 860px) { .config-columns { flex-direction: column; } }
+
+.config-card {
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+.config-card.dragging  { opacity: .4; box-shadow: none; }
+.config-card.drag-over { outline: 2px dashed var(--accent, #e5a00d); }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .65rem 1rem;
+  background: var(--bg-elev-2, #252525);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.card-title  { flex: 1; font-weight: 600; font-size: .9rem; }
+.drag-handle {
+  font-size: 1.1rem;
+  color: var(--muted);
+  cursor: grab;
+  display: none;
+  line-height: 1;
+  padding: 0 2px;
+}
+.config-col.unlocked .drag-handle { display: inline; }
+.config-col.unlocked .config-card { cursor: default; }
+
+.card-body { padding: 1rem; }
+.card-body > * + * { margin-top: .75rem; }
+
+/* fieldset-like sections inside cards (no border needed, card provides it) */
+.card-body fieldset { border: none; padding: 0; margin: 0; }
+.card-body legend   { display: none; }
+
+/* lock toggle button */
+#btn-lock { min-width: 110px; }
+
+/* logs console inside card fills width */
+#live-logs { max-height: 40vh; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header>
+  <h1>{{ t("header.config") }}</h1>
+  <div class="button-group">
+    <button type="button" id="btn-lock" class="button-secondary">{{ t("config.lock_btn") }}</button>
+    <button type="button" class="button-primary js-save-config">{{ t("config.save") }}</button>
+  </div>
+</header>
+
+<main style="padding: 0 1rem 2rem;">
+  <div id="config-save-message" style="display:none; margin-bottom:.5rem;"></div>
+  {% if success_message %}<div class="success-box" aria-live="polite" style="margin-bottom:.5rem;">{{ success_message }}</div>{% endif %}
+
+  <form method="POST" action="{{ url_for('config.config_page') }}" id="cfg-form" autocomplete="off">
+  <div class="config-columns" id="config-columns">
+  <div class="config-col locked" id="config-col-left">
+
+    <!-- ── Card: Plex ─────────────────────────────────────────────────────── -->
+    <div class="config-card" id="card-plex" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.plex_section") }}</span>
+      </div>
+      <div class="card-body">
+        <div>
+          <label for="language">{{ t("config.language") }}</label>
+          <select id="language" name="language">
+            {% set lang = config.get('LANGUAGE', 'fr') %}
+            <option value="fr" {% if lang == 'fr' %}selected{% endif %}>🇫🇷 Français</option>
+            <option value="en" {% if lang == 'en' %}selected{% endif %}>🇺🇸 English</option>
+          </select>
+        </div>
+        <div>
+          <label for="tmdb_api_key">{{ t("config.tmdb_key") }}</label>
+          <input type="text" id="tmdb_api_key" name="tmdb_api_key"
+                 value="{{ config.get('TMDB_API_KEY','') }}"
+                 placeholder="{{ t('config.tmdb_key_placeholder') }}" spellcheck="false">
+        </div>
+        <div class="row-inline">
+          <div style="flex:1">
+            <label for="refresh_delay_days">{{ t("config.cache") }}</label>
+            <input type="number" id="refresh_delay_days" name="refresh_delay_days" min="1" max="365"
+                   value="{{ config.get('REFRESH_DELAY_DAYS',30) }}">
+          </div>
+          <div style="flex:1">
+            <label for="refresh_time">{{ t("config.cache_time") }}</label>
+            <input type="time" id="refresh_time" name="refresh_time" value="{{ config.get('REFRESH_TIME','03:00') }}">
+          </div>
+        </div>
+        {% if is_logged_in and plex_libraries %}
+        <div>
+          <label>{{ t("config.library_list_header") }}</label>
+          <ul style="margin:.3rem 0 0; padding-left:1.2rem; font-size:.85rem;">
+            {% for lib in plex_libraries %}
+              <li>{{ lib.title }} <span class="muted">({{ lib.type }})</span></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── Card: Comparaison ─────────────────────────────────────────────── -->
+    <div class="config-card" id="card-compare" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.comparison_section") }}</span>
+      </div>
+      <div class="card-body">
+        <div>
+          <label for="resolution_filter_mode">{{ t("config.compare_filter_title") }}</label>
+          <select id="resolution_filter_mode" name="resolution_filter_mode">
+            {% set mode = config.get('RESOLUTION_FILTER_MODE', 'none') %}
+            <option value="none" {% if mode == 'none' %}selected{% endif %}>{{ t("config.compare_filter_resolution_none") }}</option>
+            <option value="equal_or_higher" {% if mode == 'equal_or_higher' %}selected{% endif %}>{{ t("config.compare_filter_resolution_same") }}</option>
+            <option value="higher_only" {% if mode == 'higher_only' %}selected{% endif %}>{{ t("config.compare_filter_resolution_higher") }}</option>
+          </select>
+        </div>
+        <div class="row-inline" style="align-items:center;">
+          <div style="flex:1; display:flex; align-items:center;">
+            <label class="inline" style="margin:0;">
+              <input type="checkbox" name="compare_use_bitrate" value="1"
+                     {% if config.get('COMPARE_USE_BITRATE', True) %}checked{% endif %}>
+              {{ t("config.compare_filter_bitrate_check") }}
+            </label>
+          </div>
+          <div style="flex:1; text-align:right;">
+            <label for="min_bitrate_diff_percent" style="display:block; text-align:right;">{{ t("config.compare_filter_bitrate_gap") }}</label>
+            <input type="number" id="min_bitrate_diff_percent" name="min_bitrate_diff_percent"
+                   min="0" max="100" value="{{ config.get('MIN_BITRATE_DIFF_PERCENT', 10) }}"
+                   style="width:120px; text-align:right;">
+          </div>
+        </div>
+        <small class="muted">{{ t("config.compare_filter_bitrate_example") }}</small>
+        <div>
+          <label class="inline">
+            <input type="checkbox" id="ignore_transcoded_in_better" name="ignore_transcoded_in_better" value="1"
+                   {% if config.get('IGNORE_TRANSCODED_IN_BETTER', False) %}checked{% endif %}>
+            <span>{{ t("config.compare_filter_transcoded") }}</span>
+          </label>
+        </div>
+        <div>
+          <label for="show_only_labels">{{ t("config.compare_filter_labels") }}<br>
+            <small class="muted">{{ t("config.compare_filter_labels_example") }}</small>
+          </label>
+          <input type="text" id="show_only_labels" name="show_only_labels"
+                 placeholder="Plex personnel" value="{{ config.get('SHOW_ONLY_LABELS', [])|join(', ') }}">
+        </div>
+        <div>
+          <label for="excluded_libraries">{{ t("config.excluded_libraries") }}<br>
+            <small class="muted">{{ t("config.excluded_libraries_example") }}</small>
+          </label>
+          <input type="text" id="excluded_libraries" name="excluded_libraries"
+                 placeholder="Tests, Temp" value="{{ config.get('EXCLUDED_LIBRARIES', [])|join(', ') }}">
+        </div>
+      </div>
+    </div>
+
+  </div>{# /config-col-left #}
+  <div class="config-col locked" id="config-col-right">
+
+    <!-- ── Card: Alias FTP ───────────────────────────────────────────────── -->
+    <div class="config-card" id="card-aliases" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.alias_section") }}</span>
+      </div>
+      <div class="card-body">
+        <p class="muted" style="margin:0 0 .75rem">{{ t("config.alias_desc") }}</p>
+        <div>
+          <label style="font-weight:600; font-size:.85rem;">{{ t("config.alias_manual") }}</label>
+          <div id="alias-list" style="margin-top:.4rem;">
+            {% for plex_title, entry in ftp_aliases.items() if entry.source == 'manual' %}
+            <div class="alias-row row-inline" style="align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+              <input type="text" name="alias_keys[]" value="{{ plex_title }}" placeholder="{{ t('config.alias_plex_placeholder') }}" style="flex:1;" spellcheck="false">
+              <span style="color:#888;">→</span>
+              <input type="text" name="alias_values[]" value="{{ entry.ftp_title }}" placeholder="{{ t('config.alias_ftp_placeholder') }}" style="flex:1;" spellcheck="false">
+              <button type="button" class="button-danger" style="padding:0.25rem 0.6rem;" onclick="this.closest('.alias-row').remove()">✕</button>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="button-secondary" style="margin-top:.3rem;" onclick="addAliasRow()">{{ t("config.alias_add") }}</button>
+        </div>
+
+        {% set auto_aliases = ftp_aliases.items() | selectattr('1.source', 'in', ['tmdb', 'tvmaze']) | list %}
+        {% if auto_aliases %}
+        <div style="margin-top:.75rem;">
+          <button type="button" class="button-secondary" style="padding:.3rem .75rem; font-size:.9rem;"
+                  onclick="toggleAutoAliases(this)">
+            ▶ {{ t("config.alias_auto_prefix") }} {{ auto_aliases | length }}
+          </button>
+          <div id="auto-alias-list" style="display:none; margin-top:.5rem;">
+            {% for plex_title, entry in auto_aliases %}
+            <div class="alias-row row-inline" style="align-items:center; gap:.5rem; margin-bottom:.4rem;">
+              <span style="flex:1; padding:.3rem; font-size:.9rem;">{{ plex_title }}</span>
+              <span style="color:#888;">→</span>
+              <span style="flex:1; padding:.3rem; font-size:.9rem;">{{ entry.ftp_title }}{% if entry.media_type %} <small class="muted">({{ entry.media_type }})</small>{% endif %} <small class="muted" style="opacity:.6;">via {{ entry.source | upper }}</small></span>
+              <button type="button" class="button-secondary btn-promote-alias" data-title="{{ plex_title | e }}" style="padding:.2rem .5rem; font-size:.8rem; white-space:nowrap;">{{ t("config.alias_promote") }}</button>
+              <button type="button" class="button-danger btn-delete-alias" data-title="{{ plex_title | e }}" style="padding:.2rem .5rem; font-size:.8rem;">✕</button>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── Card: FTP ─────────────────────────────────────────────────────── -->
+    <div class="config-card" id="card-ftp" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.ftp_section") }}</span>
+      </div>
+      <div class="card-body">
+        <input type="hidden" name="ftp_servers_json" id="ftp-servers-json">
+
+        <div id="ftp-servers-list">
+          {% for srv in config.get('FTP_SERVERS', []) %}
+          <div class="ftp-server-block" data-server-idx="{{ loop.index0 }}" style="border:1px solid var(--border-color,#444); border-radius:6px; margin-bottom:.75rem; padding:.75rem; background:var(--card-bg,#1e1e2e);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem;">
+              <strong class="srv-name-display" style="font-size:1rem;">{{ srv.get('name','FTP') }}</strong>
+              <button type="button" class="button-secondary delete-server-btn" style="padding:.2rem .6rem;">{{ t("config.ftp_server_delete") }}</button>
+            </div>
+            <input type="hidden" class="srv-id" value="{{ srv.get('id','') }}">
+            <label class="inline" style="margin-bottom:.5rem;">
+              <input type="checkbox" class="srv-enabled" {% if srv.get('enabled', True) %}checked{% endif %}>
+              <span>{{ t("config.ftp_server_enable") }}</span>
+            </label>
+            <div>
+              <label>{{ t("config.ftp_server_name") }}</label>
+              <input type="text" class="srv-name" value="{{ srv.get('name','') }}" placeholder="{{ t('config.ftp_server_name_placeholder') }}" spellcheck="false">
+            </div>
+            <div class="row-inline">
+              <div style="flex:2">
+                <label>{{ t("config.ftp_server_host") }}</label>
+                <input type="text" class="srv-host" value="{{ srv.get('host','') }}" placeholder="{{ t('config.ftp_server_host_placeholder') }}" spellcheck="false">
+              </div>
+              <div style="flex:1">
+                <label>{{ t("config.ftp_server_port") }}</label>
+                <input type="number" class="srv-port" min="1" max="65535" value="{{ srv.get('port',21) }}">
+              </div>
+            </div>
+            <div class="row-inline">
+              <div style="flex:1">
+                <label>{{ t("config.ftp_server_user") }}</label>
+                <input type="text" class="srv-user" value="{{ srv.get('user','') }}" placeholder="{{ t('config.ftp_server_user_placeholder') }}" spellcheck="false">
+              </div>
+              <div style="flex:1">
+                <label>{{ t("config.ftp_server_pass") }}</label>
+                <input type="password" class="srv-pass" value="{{ srv.get('pass','') }}" placeholder="{{ t('config.ftp_server_pass_placeholder') }}" spellcheck="false">
+              </div>
+            </div>
+            <div class="row-inline" style="align-items:center;">
+              <label class="inline" style="margin:0; flex:1;">
+                <input type="checkbox" class="srv-tls" {% if srv.get('tls', False) %}checked{% endif %}>
+                <span>{{ t("config.ftp_server_tls") }}</span>
+              </label>
+              <label class="inline" style="margin:0; flex:1;">
+                <input type="checkbox" class="srv-passive" {% if srv.get('passive', True) %}checked{% endif %}>
+                <span>{{ t("config.ftp_server_passive") }}</span>
+              </label>
+            </div>
+            <div>
+              <label>{{ t("config.ftp_server_roots") }}</label>
+              <div class="srv-roots-list stack" style="margin-top:.4rem;">
+                {% for root in srv.get('roots', []) %}
+                  <div class="row-inline">
+                    <input type="text" class="srv-root-input" value="{{ root }}" placeholder="{{ t('config.ftp_server_roots_placeholder') }}" spellcheck="false" style="flex:1">
+                    <button type="button" class="button-secondary remove-row">{{ t("config.ftp_server_root_delete") }}</button>
+                  </div>
+                {% else %}
+                  <div class="row-inline">
+                    <input type="text" class="srv-root-input" placeholder="{{ t('config.ftp_server_roots_placeholder') }}" spellcheck="false" style="flex:1">
+                    <button type="button" class="button-secondary remove-row">{{ t("config.ftp_server_root_delete") }}</button>
+                  </div>
+                {% endfor %}
+              </div>
+              <button type="button" class="button-primary add-srv-root-btn" style="margin-top:.5rem; font-size:.82rem; padding:.25rem .6rem;">{{ t("config.ftp_server_add_root") }}</button>
+            </div>
+            <div class="row-inline" style="margin-top:.5rem;">
+              <div style="flex:1">
+                <label>{{ t("config.ftp_server_dl_movies") }}</label>
+                <input type="text" class="srv-dl-movies" value="{{ srv.get('download_dir_movies','') }}" placeholder="\\10.0.0.3\Backup\Films" spellcheck="false">
+              </div>
+              <div style="flex:1">
+                <label>{{ t("config.ftp_server_dl_shows") }}</label>
+                <input type="text" class="srv-dl-shows" value="{{ srv.get('download_dir_shows','') }}" placeholder="\\10.0.0.3\Backup\Series" spellcheck="false">
+              </div>
+            </div>
+            <div style="margin-top:.5rem;">
+              <label>{{ t("config.ftp_server_refresh") }}</label>
+              <input type="number" class="srv-refresh-hours" min="1" max="720" value="{{ srv.get('refresh_hours',12) }}" style="width:6rem;">
+            </div>
+            <div style="margin-top:.5rem;">
+              <label>{{ t("config.ftp_server_plex_servers") }}</label>
+              <p class="muted" style="margin:.2rem 0 .3rem; font-size:.8rem;">{{ t("config.ftp_server_plex_hint") }}</p>
+              <div class="srv-plex-servers-list" style="display:flex; flex-wrap:wrap; gap:.3rem .8rem; margin-top:.3rem;">
+                {% set _sel = srv.get('plex_servers') or [] %}
+                {% for rname in plex_remote_servers %}
+                  <label class="inline" style="margin:0;">
+                    <input type="checkbox" class="srv-plex-cb" value="{{ rname }}" {% if rname in _sel %}checked{% endif %}>
+                    <span>{{ rname }}</span>
+                  </label>
+                {% else %}
+                  <span class="muted" style="font-size:.85rem;">{{ t("config.ftp_server_no_plex") }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="button-group" style="margin-top:.75rem;">
+              <button type="button" class="button-secondary test-srv-btn">{{ t("config.ftp_server_test") }}</button>
+              <button type="button" class="button-secondary reindex-srv-btn">{{ t("config.ftp_server_reindex") }}</button>
+            </div>
+            <div class="srv-status muted" style="margin-top:.3rem; font-size:.85rem;"></div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <button type="button" id="add-ftp-server-btn" class="button-primary" style="margin-bottom:.5rem;">{{ t("config.ftp_add_server") }}</button>
+
+        <div id="ftp-status" class="muted"></div>
+      </div>
+    </div>
+
+    <!-- ── Card: Planification FTP ───────────────────────────────────────── -->
+    <div class="config-card" id="card-schedule" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.schedule_section") }}</span>
+      </div>
+      <div class="card-body">
+        <div>
+          <label class="checkbox-label">
+            <input type="checkbox" name="auto_download_enabled" id="auto_download_enabled"
+                   {% if config.get('AUTO_DOWNLOAD_ENABLED') %}checked{% endif %}>
+            {{ t("config.schedule_auto_enable") }}
+          </label>
+          <p class="muted" style="margin:.3rem 0 0; font-size:.82rem;">
+            {{ t("config.schedule_auto_desc") }}
+          </p>
+        </div>
+        <div class="row-inline">
+          <div style="flex:1">
+            <label for="auto_download_start">{{ t("config.schedule_start") }}</label>
+            <input type="time" id="auto_download_start" name="auto_download_start"
+                   value="{{ config.get('AUTO_DOWNLOAD_START','00:00') }}">
+          </div>
+          <div style="flex:1">
+            <label for="auto_download_end">{{ t("config.schedule_end") }}</label>
+            <input type="time" id="auto_download_end" name="auto_download_end"
+                   value="{{ config.get('AUTO_DOWNLOAD_END','06:00') }}">
+          </div>
+          <div style="flex:1">
+            <label for="ftp_auto_max_per_day">{{ t("config.schedule_max_per_day") }} <small class="muted">{{ t("config.schedule_max_hint") }}</small></label>
+            <input type="number" id="ftp_auto_max_per_day" name="ftp_auto_max_per_day"
+                   min="0" value="{{ config.get('FTP_AUTO_MAX_PER_DAY', 0) }}">
+          </div>
+        </div>
+        <div>
+          <label for="ftp_auto_skip_days">{{ t("config.schedule_skip_days") }} <small class="muted">{{ t("config.schedule_skip_hint") }}</small></label>
+          <input type="text" id="ftp_auto_skip_days" name="ftp_auto_skip_days"
+                 value="{{ (config.get('FTP_AUTO_SKIP_DAYS') or []) | join(',') }}"
+                 placeholder="1,2">
+        </div>
+        <div id="ftp-auto-status-box" class="muted" style="font-size:.83rem;"></div>
+      </div>
+    </div>
+
+    <!-- ── Card: MKV auto-remux ──────────────────────────────────────────── -->
+    <div class="config-card" id="card-autoremux" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.autoremux_section") }}</span>
+      </div>
+      <div class="card-body">
+        <div>
+          <label class="checkbox-label">
+            <input type="checkbox" name="auto_mkv_enabled" id="auto_mkv_enabled"
+                   {% if config.get('AUTO_MKV_ENABLED') %}checked{% endif %}>
+            {{ t("config.autoremux_enable") }}
+          </label>
+          <p class="muted" style="margin:.3rem 0 0; font-size:.82rem;">
+            {{ t("config.autoremux_desc") }}
+          </p>
+        </div>
+        <div class="row-inline">
+          <div style="flex:1">
+            <label for="auto_mkv_dst_movies">{{ t("config.autoremux_dst_movies") }}</label>
+            <input type="text" id="auto_mkv_dst_movies" name="auto_mkv_dst_movies"
+                   value="{{ config.get('AUTO_MKV_DST_MOVIES','') }}"
+                   placeholder="/mnt/user/Films" spellcheck="false">
+          </div>
+          <div style="flex:1">
+            <label for="auto_mkv_dst_shows">{{ t("config.autoremux_dst_shows") }}</label>
+            <input type="text" id="auto_mkv_dst_shows" name="auto_mkv_dst_shows"
+                   value="{{ config.get('AUTO_MKV_DST_SHOWS','') }}"
+                   placeholder="/mnt/user/Séries" spellcheck="false">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Card: MKV Tools ───────────────────────────────────────────────── -->
+    <div class="config-card" id="card-mkv" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.mkvtoolnix_header") }}</span>
+      </div>
+      <div class="card-body">
+        <div>
+          <label for="mkvtoolnix_bin">{{ t("config.mkvtoolnix_directory") }}</label>
+          <input type="text" id="mkvtoolnix_bin" name="mkvtoolnix_bin"
+                 value="{{ config.get('MKVTOOLNIX_BIN','') }}" placeholder="C:\Program Files\MKVToolNix" spellcheck="false">
+        </div>
+        <div class="row-inline">
+          <div style="flex:1">
+            <label for="default_audio_lang">{{ t("config.mkvtoolnix_default_audio") }}</label>
+            <select id="default_audio_lang" name="default_audio_lang">
+              {% set dal = config.get('DEFAULT_AUDIO_LANG','fr-CA') %}
+              <option value="fr-CA" {% if dal == 'fr-CA' %}selected{% endif %}>{{ t("config.lang_fr_ca") }} (fr-CA)</option>
+              <option value="fr"    {% if dal == 'fr'    %}selected{% endif %}>{{ t("config.lang_fr") }} (fr)</option>
+              <option value="en"    {% if dal == 'en'    %}selected{% endif %}>{{ t("config.lang_en") }} (en)</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label for="default_subtitle_lang">{{ t("config.mkvtoolnix_default_subtitle") }}</label>
+            <select id="default_subtitle_lang" name="default_subtitle_lang">
+              {% set dsl = config.get('DEFAULT_SUBTITLE_LANG','fr-CA') %}
+              <option value="fr-CA" {% if dsl == 'fr-CA' %}selected{% endif %}>{{ t("config.lang_fr_ca") }} (fr-CA)</option>
+              <option value="fr"    {% if dsl == 'fr'    %}selected{% endif %}>{{ t("config.lang_fr") }} (fr)</option>
+              <option value="en"    {% if dsl == 'en'    %}selected{% endif %}>{{ t("config.lang_en") }} (en)</option>
+              <option value=""      {% if dsl == ''      %}selected{% endif %}>{{ t("config.lang_none") }}</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>{{ t("config.mkv_source_header") }}</label>
+          <div id="sources-list" class="stack" style="margin-top:.4rem;">
+            {% for d in config.get('MKV_SOURCE_DIRS', []) %}
+              <div class="row-inline">
+                <input type="text" name="mkv_source_dirs[]" value="{{ d }}" placeholder="{{ t('config.mkvtoolnix_directory') }}" spellcheck="false" style="flex:1">
+                <button type="button" class="button-secondary remove-row">{{ t("config.mkv_source_delete") }}</button>
+              </div>
+            {% else %}
+              <div class="row-inline">
+                <input type="text" name="mkv_source_dirs[]" placeholder="{{ t('config.mkv_source_placeholder') }}" spellcheck="false" style="flex:1">
+                <button type="button" class="button-secondary remove-row">{{ t("config.mkv_source_delete") }}</button>
+              </div>
+            {% endfor %}
+          </div>
+          <button type="button" id="add-source" class="button-primary" style="margin-top:.5rem;">{{ t("config.mkv_source_add") }}</button>
+        </div>
+        <div>
+          <label>{{ t("config.mkv_destination_header") }}</label>
+          <p class="muted" style="font-size:.82rem; margin:.2rem 0 .4rem;">{{ t("config.mkv_destination_library") }}</p>
+          <div id="dest-list" class="stack">
+            {% set libs = plex_libraries or [] %}
+            {% for k,v in config.get('DESTINATIONS_MKV', {}).items() %}
+              <div class="row-inline">
+                <select name="dest_keys_select[]">
+                  <option value="">{{ t("config.mkv_destination_add") }}</option>
+                  {% for lib in libs %}
+                    <option value="{{ lib.title }}" {% if lib.title == k %}selected{% endif %}>{{ lib.title }} ({{ lib.type }})</option>
+                  {% endfor %}
+                </select>
+                <input type="hidden" name="dest_keys[]" value="{{ k }}">
+                <input type="text" name="dest_values[]" value="{{ v }}" placeholder="{{ t('config.mkv_destination_placeholder') }}" spellcheck="false" style="flex:1">
+                <button type="button" class="button-secondary remove-row">{{ t("config.mkv_destination_delete") }}</button>
+              </div>
+            {% else %}
+              <div class="row-inline">
+                <select name="dest_keys_select[]">
+                  <option value="">{{ t("config.mkv_destination_library") }}</option>
+                  {% for lib in libs %}
+                    <option value="{{ lib.title }}">{{ lib.title }} ({{ lib.type }})</option>
+                  {% endfor %}
+                </select>
+                <input type="hidden" name="dest_keys[]" value="">
+                <input type="text" name="dest_values[]" placeholder="{{ t('config.mkv_destination_placeholder') }}" spellcheck="false" style="flex:1">
+                <button type="button" class="button-secondary remove-row">{{ t("config.mkv_destination_delete") }}</button>
+              </div>
+            {% endfor %}
+          </div>
+          <button type="button" id="add-dest" class="button-primary" style="margin-top:.5rem;">{{ t("config.mkv_destination_add_button") }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Card: Logs ────────────────────────────────────────────────────── -->
+    <div class="config-card" id="card-logs" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.logs_header") }}</span>
+      </div>
+      <div class="card-body">
+        <div class="row-inline">
+          <div style="flex:1">
+            <label for="log_level">{{ t("config.logs_title") }}</label>
+            <select id="log_level" name="log_level">
+              {% set lvl = (config.get('LOG_LEVEL','INFO') or 'INFO').upper() %}
+              {% for opt in ['DEBUG','INFO','WARNING','ERROR'] %}
+                <option value="{{ opt }}" {% if lvl == opt %}selected{% endif %}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div style="flex:1">
+            <label for="log_retention_days">{{ t("config.logs_retention") }}</label>
+            <input type="number" id="log_retention_days" name="log_retention_days" min="1" max="365"
+                   value="{{ config.get('LOG_RETENTION_DAYS', 7) }}">
+          </div>
+        </div>
+        <div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <label style="margin:0;">{{ t("config.logs_live") }}</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <select id="logs-level-filter" style="padding:3px 8px; font-size:12px;">
+                <option value="ALL">{{ t("config.logs_filter_all") }}</option>
+                <option value="DEBUG">DEBUG+</option>
+                <option value="INFO" selected>INFO+</option>
+                <option value="WARNING">WARNING+</option>
+                <option value="ERROR">ERROR+</option>
+              </select>
+              <span id="logs-scroll-indicator" style="font-size:11px; color:var(--txt-muted); display:none;">{{ t("config.logs_paused") }}</span>
+              <button type="button" id="logs-scroll-btn" class="button-secondary" style="padding:4px 10px; font-size:12px;">{{ t("config.logs_scroll_bottom") }}</button>
+              <button type="button" id="logs-clear-btn" class="button-secondary" style="padding:4px 10px; font-size:12px;">{{ t("config.logs_clear") }}</button>
+            </div>
+          </div>
+          <div id="live-logs" class="logs-console"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Card: Exclusions ──────────────────────────────────────────────── -->
+    <div class="config-card" id="card-ignore" draggable="false">
+      <div class="card-header">
+        <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
+        <span class="card-title">{{ t("config.exclusions_section") }}</span>
+      </div>
+      <div class="card-body">
+        <p class="muted" style="margin:0 0 .75rem; font-size:.85rem;">{{ t("config.exclusions_desc") }}</p>
+        <div id="ignore-list-container" style="margin-bottom:1rem;">
+          <em class="muted" id="ignore-list-loading">{{ t("config.exclusions_loading") }}</em>
+        </div>
+        <div class="row-inline" style="gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+          <div style="flex:2; min-width:140px;">
+            <label for="ignore-add-title">{{ t("config.exclusions_title_label") }}</label>
+            <input type="text" id="ignore-add-title" placeholder="{{ t('config.exclusions_title_placeholder') }}" spellcheck="false">
+          </div>
+          <div style="flex:1; min-width:100px;">
+            <label for="ignore-add-type">{{ t("config.exclusions_type_label") }}</label>
+            <select id="ignore-add-type">
+              <option value="">{{ t("config.exclusions_type_all") }}</option>
+              <option value="show">{{ t("config.exclusions_type_show") }}</option>
+              <option value="movie">{{ t("config.exclusions_type_movie") }}</option>
+            </select>
+          </div>
+          <div style="flex:2; min-width:140px;">
+            <label for="ignore-add-reason">{{ t("config.exclusions_reason_label") }}</label>
+            <input type="text" id="ignore-add-reason" placeholder="{{ t('config.exclusions_reason_placeholder') }}" spellcheck="false">
+          </div>
+          <button type="button" id="ignore-add-btn" class="button-primary" style="white-space:nowrap;">{{ t("config.exclusions_add") }}</button>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /config-col-right #}
+  </div>{# /config-columns #}
+
+  <div style="margin-top:1rem; text-align:right;">
+    <button type="button" class="button-primary js-save-config">{{ t("config.save") }}</button>
+  </div>
+  </form>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const _i18n = {
+  lock_btn:                 {{ t("config.lock_btn")                 | tojson }},
+  unlock_btn:               {{ t("config.unlock_btn")               | tojson }},
+  saving:                   {{ t("config.saving")                   | tojson }},
+  save_error:               {{ t("config.save_error")               | tojson }},
+  save_network_error:       {{ t("config.save_network_error")       | tojson }},
+  saved:                    {{ t("config.saved")                    | tojson }},
+  alias_delete_confirm:     {{ t("config.alias_delete_confirm")     | tojson }},
+  alias_plex_placeholder:   {{ t("config.alias_plex_placeholder")   | tojson }},
+  alias_ftp_placeholder:    {{ t("config.alias_ftp_placeholder")    | tojson }},
+  ftp_server_new_label:     {{ t("config.ftp_server_new_label")     | tojson }},
+  ftp_server_delete:        {{ t("config.ftp_server_delete")        | tojson }},
+  ftp_server_enable:        {{ t("config.ftp_server_enable")        | tojson }},
+  ftp_server_name:          {{ t("config.ftp_server_name")          | tojson }},
+  ftp_server_name_ph:       {{ t("config.ftp_server_name_placeholder") | tojson }},
+  ftp_server_host:          {{ t("config.ftp_server_host")          | tojson }},
+  ftp_server_host_ph:       {{ t("config.ftp_server_host_placeholder") | tojson }},
+  ftp_server_port:          {{ t("config.ftp_server_port")          | tojson }},
+  ftp_server_user:          {{ t("config.ftp_server_user")          | tojson }},
+  ftp_server_user_ph:       {{ t("config.ftp_server_user_placeholder") | tojson }},
+  ftp_server_pass:          {{ t("config.ftp_server_pass")          | tojson }},
+  ftp_server_pass_ph:       {{ t("config.ftp_server_pass_placeholder") | tojson }},
+  ftp_server_tls:           {{ t("config.ftp_server_tls")           | tojson }},
+  ftp_server_passive:       {{ t("config.ftp_server_passive")       | tojson }},
+  ftp_server_roots:         {{ t("config.ftp_server_roots")         | tojson }},
+  ftp_server_roots_ph:      {{ t("config.ftp_server_roots_placeholder") | tojson }},
+  ftp_server_add_root:      {{ t("config.ftp_server_add_root")      | tojson }},
+  ftp_server_root_delete:   {{ t("config.ftp_server_root_delete")   | tojson }},
+  ftp_server_dl_movies:     {{ t("config.ftp_server_dl_movies")     | tojson }},
+  ftp_server_dl_shows:      {{ t("config.ftp_server_dl_shows")      | tojson }},
+  ftp_server_refresh:       {{ t("config.ftp_server_refresh")       | tojson }},
+  ftp_server_plex_servers:  {{ t("config.ftp_server_plex_servers")  | tojson }},
+  ftp_server_plex_hint:     {{ t("config.ftp_server_plex_hint")     | tojson }},
+  ftp_server_no_plex:       {{ t("config.ftp_server_no_plex")       | tojson }},
+  ftp_server_test:          {{ t("config.ftp_server_test")          | tojson }},
+  ftp_server_reindex:       {{ t("config.ftp_server_reindex")       | tojson }},
+  ftp_server_testing:       {{ t("config.ftp_server_testing")       | tojson }},
+  ftp_server_test_done:     {{ t("config.ftp_server_test_done")     | tojson }},
+  ftp_server_test_error:    {{ t("config.ftp_server_test_error")    | tojson }},
+  ftp_server_reindexing:    {{ t("config.ftp_server_reindexing")    | tojson }},
+  ftp_server_reindexed:     {{ t("config.ftp_server_reindexed")     | tojson }},
+  ftp_server_reindex_error: {{ t("config.ftp_server_reindex_error") | tojson }},
+  ftp_status_running:       {{ t("config.ftp_status_running")       | tojson }},
+  ftp_status_done:          {{ t("config.ftp_status_done")          | tojson }},
+  ftp_status_idle:          {{ t("config.ftp_status_idle")          | tojson }},
+  ftp_status_folder:        {{ t("config.ftp_status_folder")        | tojson }},
+  ftp_status_progress:      {{ t("config.ftp_status_progress")      | tojson }},
+  ftp_status_files:         {{ t("config.ftp_status_files")         | tojson }},
+  ftp_status_total:         {{ t("config.ftp_status_total")         | tojson }},
+  schedule_auto_disabled:   {{ t("config.schedule_auto_disabled")   | tojson }},
+  schedule_auto_active:     {{ t("config.schedule_auto_active")     | tojson }},
+  schedule_auto_window:     {{ t("config.schedule_auto_window_label") | tojson }},
+  schedule_auto_skip_day:   {{ t("config.schedule_auto_skip_day")   | tojson }},
+  schedule_auto_limit:      {{ t("config.schedule_auto_limit")      | tojson }},
+  schedule_auto_off_window: {{ t("config.schedule_auto_off_window") | tojson }},
+  schedule_auto_today:      {{ t("config.schedule_auto_today")      | tojson }},
+  schedule_auto_skipped:    {{ t("config.schedule_auto_skipped")    | tojson }},
+  mkv_source_placeholder:   {{ t("config.mkv_source_placeholder")   | tojson }},
+  mkv_source_delete:        {{ t("config.mkv_source_delete")        | tojson }},
+  mkv_dest_placeholder:     {{ t("config.mkv_destination_placeholder") | tojson }},
+  mkv_dest_delete:          {{ t("config.mkv_destination_delete")   | tojson }},
+  logs_none:                {{ t("config.logs_none")                | tojson }},
+  logs_load_error:          {{ t("config.logs_load_error")          | tojson }},
+  logs_disconnected:        {{ t("config.logs_disconnected")        | tojson }},
+  exclusions_none:          {{ t("config.exclusions_none")          | tojson }},
+  exclusions_load_error:    {{ t("config.exclusions_load_error")    | tojson }},
+  exclusions_remove_confirm:{{ t("config.exclusions_remove_confirm") | tojson }},
+  exclusions_remove:        {{ t("config.exclusions_remove")        | tojson }},
+};
+</script>
+<script>
+function toggleAutoAliases(btn) {
+  const list = document.getElementById('auto-alias-list');
+  if (!list) return;
+  const visible = list.style.display !== 'none';
+  list.style.display = visible ? 'none' : 'block';
+  btn.textContent = btn.textContent.replace(visible ? '▼' : '▶', visible ? '▶' : '▼');
+}
+
+async function promoteAlias(title, btn) {
+  btn.disabled = true;
+  try {
+    const res = await fetch('/config/alias/promote', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title})
+    });
+    const d = await res.json();
+    if (d.ok) { location.reload(); }
+    else { btn.disabled = false; }
+  } catch(e) { btn.disabled = false; }
+}
+
+async function deleteAlias(title, btn) {
+  if (!confirm(_i18n.alias_delete_confirm.replace('{title}', title))) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch('/config/alias/delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title})
+    });
+    const d = await res.json();
+    if (d.ok) { btn.closest('.alias-row').remove(); }
+    else { btn.disabled = false; }
+  } catch(e) { btn.disabled = false; }
+}
+
+function addAliasRow() {
+  const row = document.createElement('div');
+  row.className = 'alias-row row-inline';
+  row.style.cssText = 'align-items:center; gap:0.5rem; margin-bottom:0.5rem;';
+  row.innerHTML = `
+    <input type="text" name="alias_keys[]" placeholder="${_i18n.alias_plex_placeholder}" style="flex:1;" spellcheck="false">
+    <span style="color:#888;">→</span>
+    <input type="text" name="alias_values[]" placeholder="${_i18n.alias_ftp_placeholder}" style="flex:1;" spellcheck="false">
+    <button type="button" class="button-danger" style="padding:0.25rem 0.6rem;" onclick="this.closest('.alias-row').remove()">✕</button>
+  `;
+  document.getElementById('alias-list').appendChild(row);
+  row.querySelector('input').focus();
+}
+
+async function refreshAutoStatus() {
+  try {
+    const res = await fetch("/ftp/auto_status");
+    const d = await res.json();
+    const box = document.getElementById("ftp-auto-status-box");
+    if (!box) return;
+    if (!d.enabled) {
+      box.innerHTML = _i18n.schedule_auto_disabled;
+      return;
+    }
+    let parts = [];
+    if (d.active) {
+      parts.push(`<span style="color:var(--green,#4caf50)">${_i18n.schedule_auto_active}</span> — ${_i18n.schedule_auto_window} ${d.window_start}–${d.window_end}`);
+    } else if (d.is_skip_day) {
+      parts.push(`<span style="color:var(--orange,#ff9800)">${_i18n.schedule_auto_skip_day} (${new Date().getDate()})</span>`);
+    } else if (d.limit_reached) {
+      parts.push(`<span style="color:var(--orange,#ff9800)">${_i18n.schedule_auto_limit} (${d.daily_count}/${d.max_per_day})</span>`);
+    } else {
+      parts.push(`<span style="color:var(--muted,#888)">${_i18n.schedule_auto_off_window} ${d.window_start}</span>`);
+    }
+    if (d.max_per_day > 0) parts.push(`${_i18n.schedule_auto_today} ${d.daily_count} / ${d.max_per_day}`);
+    if (d.skip_days && d.skip_days.length) parts.push(`${_i18n.schedule_auto_skipped} ${d.skip_days.join(', ')}`);
+    box.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+  } catch(e) { /* silencieux */ }
+}
+setInterval(refreshAutoStatus, 10000);
+refreshAutoStatus();
+
+async function refreshFtpStatus() {
+  try {
+    const res = await fetch("/ftp/status");
+    const data = await res.json();
+    const box = document.getElementById("ftp-status-box");
+    if (!box) return;
+    if (data.running) {
+      box.innerHTML = `${_i18n.ftp_status_running}<br>${_i18n.ftp_status_folder} ${data.current_root || "-"}<br>${_i18n.ftp_status_progress} ${data.progress} / ${data.total}<br>${_i18n.ftp_status_files} ${data.files_found}`;
+    } else if (data.finished) {
+      box.innerHTML = `${_i18n.ftp_status_done}<br>${_i18n.ftp_status_total} ${data.files_found}`;
+    } else {
+      box.innerHTML = _i18n.ftp_status_idle;
+    }
+  } catch (e) { /* serveur brièvement indisponible, ignoré */ }
+}
+setInterval(refreshFtpStatus, 2000);
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function stripAnsi(str) { return str.replace(/\x1B\[[0-9;]*m/g, ''); }
+const _LOG_LEVEL_ORDER = { DEBUG: 1, INFO: 2, WARNING: 3, ERROR: 4, CRITICAL: 5 };
+function logLevel(line) { const m = line.match(/ - (DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*-/); return m ? m[1] : 'PLAIN'; }
+function logClass(line) {
+  const level = logLevel(line);
+  if (level === 'DEBUG') return 'log-debug';
+  if (level === 'INFO') return 'log-info';
+  if (level === 'WARNING') return 'log-warning';
+  if (level === 'ERROR' || level === 'CRITICAL') return 'log-error';
+  return 'log-plain';
+}
+function isLevelVisible(lineLevel, filterLevel) {
+  if (filterLevel === 'ALL') return true;
+  if (lineLevel === 'PLAIN') return true;
+  return (_LOG_LEVEL_ORDER[lineLevel] || 0) >= (_LOG_LEVEL_ORDER[filterLevel] || 0);
+}
+function appendLogLine(logsBox, line) {
+  const clean = stripAnsi(line);
+  const level = logLevel(clean);
+  const filterLevel = document.getElementById('logs-level-filter')?.value || 'ALL';
+  const div = document.createElement('div');
+  div.className = `log-line ${logClass(clean)}`;
+  div.textContent = clean;
+  div.dataset.level = level;
+  if (!isLevelVisible(level, filterLevel)) div.style.display = 'none';
+  logsBox.appendChild(div);
+  if (!logsBox._userScrolledUp && div.style.display !== 'none') logsBox.scrollTop = logsBox.scrollHeight;
+  while (logsBox.children.length > 500) logsBox.removeChild(logsBox.firstChild);
+}
+</script>
+
+<script>
+const PLEX_REMOTE_SERVERS = {{ plex_remote_servers | tojson }};
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', ()=>{
+  const sources = document.getElementById('sources-list');
+  const dests = document.getElementById('dest-list');
+  const form = document.getElementById('cfg-form');
+  const saveMsg = document.getElementById('config-save-message');
+  const logsBox = document.getElementById('live-logs');
+  const saveButtons = document.querySelectorAll('.js-save-config');
+  const logsScrollBtn = document.getElementById('logs-scroll-btn');
+  const logsClearBtn = document.getElementById('logs-clear-btn');
+  const logsScrollIndicator = document.getElementById('logs-scroll-indicator');
+  const logsLevelFilter = document.getElementById('logs-level-filter');
+
+  if (logsLevelFilter && logsBox) {
+    logsLevelFilter.addEventListener('change', () => {
+      const filterLevel = logsLevelFilter.value;
+      logsBox.querySelectorAll('.log-line').forEach(div => {
+        div.style.display = isLevelVisible(div.dataset.level || 'PLAIN', filterLevel) ? '' : 'none';
+      });
+    });
+  }
+
+  if (logsBox) {
+    logsBox._userScrolledUp = false;
+    logsBox.addEventListener('scroll', () => {
+      const isAtBottom = logsBox.scrollHeight - logsBox.scrollTop - logsBox.clientHeight < 40;
+      logsBox._userScrolledUp = !isAtBottom;
+      if (logsScrollIndicator) logsScrollIndicator.style.display = isAtBottom ? 'none' : 'inline';
+    });
+  }
+
+  if (logsScrollBtn && logsBox) {
+    logsScrollBtn.addEventListener('click', () => { logsBox._userScrolledUp = false; logsBox.scrollTop = logsBox.scrollHeight; });
+  }
+  if (logsClearBtn && logsBox) {
+    logsClearBtn.addEventListener('click', () => { logsBox.innerHTML = ''; });
+  }
+
+  let _saveMsgTimer = null;
+  function showSaveMessage(text, ok = true) {
+    if (!saveMsg) return;
+    saveMsg.className = ok ? 'success-box' : 'warning-box';
+    saveMsg.textContent = text;
+    saveMsg.style.display = 'block';
+    if (ok) {
+      clearTimeout(_saveMsgTimer);
+      _saveMsgTimer = setTimeout(() => { saveMsg.style.display = 'none'; }, 5000);
+    }
+  }
+  function cleanEmptyRows() {
+    Array.from(sources.children).forEach(row => {
+      const i = row.querySelector('input[name="mkv_source_dirs[]"]');
+      if (i && i.value.trim() === '') row.remove();
+    });
+    Array.from(dests.children).forEach(row => {
+      const k = row.querySelector('input[name="dest_keys[]"]');
+      const v = row.querySelector('input[name="dest_values[]"]');
+      if (k && v && k.value.trim() === '' && v.value.trim() === '') row.remove();
+    });
+  }
+
+  // ── Multi-FTP helpers ──────────────────────────────────────────────────────
+  function makePlexServerCheckboxes(selectedServers) {
+    if (!PLEX_REMOTE_SERVERS || PLEX_REMOTE_SERVERS.length === 0)
+      return `<span class="muted" style="font-size:.85rem;">${_i18n.ftp_server_no_plex}</span>`;
+    return PLEX_REMOTE_SERVERS.map(name => {
+      const checked = selectedServers && selectedServers.includes(name) ? ' checked' : '';
+      return `<label class="inline" style="margin:0;"><input type="checkbox" class="srv-plex-cb" value="${name}"${checked}><span>${name}</span></label>`;
+    }).join('');
+  }
+
+  function buildFtpServersJson() {
+    const blocks = document.querySelectorAll('#ftp-servers-list .ftp-server-block');
+    const servers = Array.from(blocks).map((block, idx) => {
+      const roots = Array.from(block.querySelectorAll('.srv-root-input'))
+        .map(i => i.value.trim()).filter(Boolean);
+      const plexServers = Array.from(block.querySelectorAll('.srv-plex-cb:checked'))
+        .map(cb => cb.value);
+      const id = block.querySelector('.srv-id')?.value.trim() || `ftp_${idx + 1}`;
+      return {
+        id,
+        name: block.querySelector('.srv-name')?.value.trim() || `FTP ${idx + 1}`,
+        enabled: block.querySelector('.srv-enabled')?.checked ?? true,
+        host: block.querySelector('.srv-host')?.value.trim() || '',
+        port: parseInt(block.querySelector('.srv-port')?.value || '21', 10) || 21,
+        user: block.querySelector('.srv-user')?.value.trim() || '',
+        pass: block.querySelector('.srv-pass')?.value || '',
+        tls: block.querySelector('.srv-tls')?.checked ?? false,
+        passive: block.querySelector('.srv-passive')?.checked ?? true,
+        roots,
+        plex_servers: plexServers,
+        download_dir_movies: block.querySelector('.srv-dl-movies')?.value.trim() || '',
+        download_dir_shows: block.querySelector('.srv-dl-shows')?.value.trim() || '',
+        refresh_hours: parseInt(block.querySelector('.srv-refresh-hours')?.value || '12', 10) || 12,
+      };
+    });
+    return JSON.stringify(servers);
+  }
+
+  async function testFtpServer(block) {
+    const statusEl = block.querySelector('.srv-status');
+    if (statusEl) { statusEl.textContent = _i18n.ftp_server_testing; statusEl.className = 'srv-status muted'; }
+    try {
+      const fd = new FormData();
+      fd.append('ftp_host', block.querySelector('.srv-host')?.value.trim() || '');
+      fd.append('ftp_port', block.querySelector('.srv-port')?.value || '21');
+      fd.append('ftp_user', block.querySelector('.srv-user')?.value.trim() || '');
+      fd.append('ftp_pass', block.querySelector('.srv-pass')?.value || '');
+      if (block.querySelector('.srv-tls')?.checked) fd.append('ftp_tls', '1');
+      if (block.querySelector('.srv-passive')?.checked) fd.append('ftp_passive', '1');
+      const res = await fetch('{{ url_for("config.test_ftp") }}', {
+        method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd
+      });
+      const data = await res.json();
+      if (statusEl) { statusEl.textContent = data.message || _i18n.ftp_server_test_done; statusEl.className = data.ok ? 'srv-status success-box' : 'srv-status warning-box'; }
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = _i18n.ftp_server_test_error; statusEl.className = 'srv-status warning-box'; }
+    }
+  }
+
+  async function reindexFtpServer(block) {
+    const statusEl = block.querySelector('.srv-status');
+    const id = block.querySelector('.srv-id')?.value.trim() || '';
+    if (statusEl) { statusEl.textContent = _i18n.ftp_server_reindexing; statusEl.className = 'srv-status muted'; }
+    try {
+      const res = await fetch('/ftp/reindex', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify(id ? { ftp_id: id } : {})
+      });
+      const data = await res.json();
+      if (statusEl) {
+        statusEl.textContent = data.success ? _i18n.ftp_server_reindexed.replace('{count}', data.count ?? '?') : (data.error || _i18n.ftp_server_reindex_error);
+        statusEl.className = data.success ? 'srv-status success-box' : 'srv-status warning-box';
+      }
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = _i18n.ftp_server_test_error; statusEl.className = 'srv-status warning-box'; }
+    }
+  }
+
+  function makeFtpServerBlock(idx) {
+    return `<div class="ftp-server-block" data-server-idx="${idx}" style="border:1px solid var(--border-color,#444);border-radius:6px;margin-bottom:.75rem;padding:.75rem;background:var(--card-bg,#1e1e2e);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+        <strong class="srv-name-display" style="font-size:1rem;">${_i18n.ftp_server_new_label}</strong>
+        <button type="button" class="button-secondary delete-server-btn" style="padding:.2rem .6rem;">${_i18n.ftp_server_delete}</button>
+      </div>
+      <input type="hidden" class="srv-id" value="">
+      <label class="inline" style="margin-bottom:.5rem;"><input type="checkbox" class="srv-enabled" checked><span>${_i18n.ftp_server_enable}</span></label>
+      <div><label>${_i18n.ftp_server_name}</label><input type="text" class="srv-name" value="" placeholder="${_i18n.ftp_server_name_ph}" spellcheck="false"></div>
+      <div class="row-inline">
+        <div style="flex:2"><label>${_i18n.ftp_server_host}</label><input type="text" class="srv-host" value="" placeholder="${_i18n.ftp_server_host_ph}" spellcheck="false"></div>
+        <div style="flex:1"><label>${_i18n.ftp_server_port}</label><input type="number" class="srv-port" min="1" max="65535" value="21"></div>
+      </div>
+      <div class="row-inline">
+        <div style="flex:1"><label>${_i18n.ftp_server_user}</label><input type="text" class="srv-user" value="" placeholder="${_i18n.ftp_server_user_ph}" spellcheck="false"></div>
+        <div style="flex:1"><label>${_i18n.ftp_server_pass}</label><input type="password" class="srv-pass" value="" placeholder="${_i18n.ftp_server_pass_ph}" spellcheck="false"></div>
+      </div>
+      <div class="row-inline" style="align-items:center;">
+        <label class="inline" style="margin:0;flex:1;"><input type="checkbox" class="srv-tls"><span>${_i18n.ftp_server_tls}</span></label>
+        <label class="inline" style="margin:0;flex:1;"><input type="checkbox" class="srv-passive" checked><span>${_i18n.ftp_server_passive}</span></label>
+      </div>
+      <div><label>${_i18n.ftp_server_roots}</label>
+        <div class="srv-roots-list stack" style="margin-top:.4rem;">
+          <div class="row-inline"><input type="text" class="srv-root-input" placeholder="${_i18n.ftp_server_roots_ph}" spellcheck="false" style="flex:1"><button type="button" class="button-secondary remove-row">${_i18n.ftp_server_root_delete}</button></div>
+        </div>
+        <button type="button" class="button-primary add-srv-root-btn" style="margin-top:.5rem;font-size:.82rem;padding:.25rem .6rem;">${_i18n.ftp_server_add_root}</button>
+      </div>
+      <div class="row-inline" style="margin-top:.5rem;">
+        <div style="flex:1"><label>${_i18n.ftp_server_dl_movies}</label><input type="text" class="srv-dl-movies" value="" placeholder="\\\\10.0.0.3\\\\Backup\\\\Films" spellcheck="false"></div>
+        <div style="flex:1"><label>${_i18n.ftp_server_dl_shows}</label><input type="text" class="srv-dl-shows" value="" placeholder="\\\\10.0.0.3\\\\Backup\\\\Series" spellcheck="false"></div>
+      </div>
+      <div style="margin-top:.5rem;"><label>${_i18n.ftp_server_refresh}</label><input type="number" class="srv-refresh-hours" min="1" max="720" value="12" style="width:6rem;"></div>
+      <div style="margin-top:.5rem;"><label>${_i18n.ftp_server_plex_servers}</label><p class="muted" style="margin:.2rem 0 .3rem;font-size:.8rem;">${_i18n.ftp_server_plex_hint}</p><div class="srv-plex-servers-list" style="display:flex;flex-wrap:wrap;gap:.3rem .8rem;margin-top:.3rem;">${makePlexServerCheckboxes([])}</div></div>
+      <div class="button-group" style="margin-top:.75rem;">
+        <button type="button" class="button-secondary test-srv-btn">${_i18n.ftp_server_test}</button>
+        <button type="button" class="button-secondary reindex-srv-btn">${_i18n.ftp_server_reindex}</button>
+      </div>
+      <div class="srv-status muted" style="margin-top:.3rem;font-size:.85rem;"></div>
+    </div>`;
+  }
+
+  async function loadLastLogs() {
+    if (!logsBox) return;
+    try {
+      const res = await fetch('{{ url_for("config.logs_tail") }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const data = await res.json();
+      logsBox.innerHTML = '';
+      if (Array.isArray(data.lines) && data.lines.length > 0) {
+        data.lines.forEach(line => appendLogLine(logsBox, line));
+      } else {
+        appendLogLine(logsBox, '[Logs] ' + _i18n.logs_none);
+      }
+      logsBox.scrollTop = logsBox.scrollHeight;
+    } catch (e) {
+      logsBox.innerHTML = '';
+      appendLogLine(logsBox, '[Logs] ' + _i18n.logs_load_error);
+    }
+  }
+
+  function startLogsStream() {
+    if (!logsBox) return;
+    const es = new EventSource('{{ url_for("config.logs_stream") }}');
+    es.onmessage = function(event) { appendLogLine(logsBox, event.data); };
+    es.onerror = function() { appendLogLine(logsBox, '[Logs] ' + _i18n.logs_disconnected); es.close(); };
+  }
+
+  const _langOnLoad = {{ config.get('LANGUAGE', 'fr') | tojson }};
+
+  function prepareForm() {
+    cleanEmptyRows();
+    document.getElementById('ftp-servers-json').value = buildFtpServersJson();
+  }
+
+  function submitWithReload() {
+    prepareForm();
+    localStorage.setItem('config_saved', '1');
+    form.removeEventListener('submit', onFormSubmit);
+    form.submit();
+  }
+
+  let _saveInProgress = false;
+  async function ajaxSaveConfig() {
+    if (_saveInProgress) return;
+    _saveInProgress = true;
+    prepareForm();
+    saveButtons.forEach(btn => { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = _i18n.saving; });
+    try {
+      const formData = new FormData(form);
+      let res;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          res = await fetch(form.action, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
+          break;
+        } catch(netErr) {
+          if (attempt < 2) { await new Promise(r => setTimeout(r, 1500)); continue; }
+          throw netErr;
+        }
+      }
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch(e) {
+        console.error('[config save] Réponse non-JSON:', text);
+        showSaveMessage(_i18n.save_error, false);
+        return;
+      }
+      if (res.ok && data.ok) {
+        showSaveMessage(data.message || _i18n.saved, true);
+        loadLastLogs();
+      } else { showSaveMessage(data.message || _i18n.save_error, false); }
+    } catch (err) {
+      console.error('[config save] Erreur réseau:', err);
+      showSaveMessage(_i18n.save_network_error, false);
+    } finally {
+      _saveInProgress = false;
+      saveButtons.forEach(btn => { btn.disabled = false; btn.textContent = btn.dataset.originalText || _i18n.saved; });
+    }
+  }
+
+  function handleSave() {
+    const langSel = document.getElementById('language');
+    if (langSel && langSel.value !== _langOnLoad) {
+      submitWithReload();
+    } else {
+      ajaxSaveConfig();
+    }
+  }
+
+  // Afficher le message de confirmation après un reload dû à un changement de langue
+  if (localStorage.getItem('config_saved')) {
+    localStorage.removeItem('config_saved');
+    showSaveMessage(_i18n.saved, true);
+  }
+
+  document.getElementById('add-source').addEventListener('click', ()=>{
+    sources.insertAdjacentHTML('beforeend', `<div class="row-inline"><input type="text" name="mkv_source_dirs[]" placeholder="${_i18n.mkv_source_placeholder}" spellcheck="false" style="flex:1"><button type="button" class="button-secondary remove-row">${_i18n.mkv_source_delete}</button></div>`);
+  });
+
+  document.getElementById('add-dest').addEventListener('click', ()=>{
+    dests.insertAdjacentHTML('beforeend', `<div class="row-inline">
+      <select name="dest_keys_select[]"><option value="">{{ t("config.mkv_destination_add") }}</option>
+      {% for lib in plex_libraries or [] %}<option value="{{ lib.title }}">{{ lib.title }} ({{ lib.type }})</option>{% endfor %}
+      </select>
+      <input type="hidden" name="dest_keys[]" value="">
+      <input type="text" name="dest_values[]" placeholder="${_i18n.mkv_dest_placeholder}" spellcheck="false" style="flex:1">
+      <button type="button" class="button-secondary remove-row">${_i18n.mkv_dest_delete}</button></div>`);
+  });
+
+  document.getElementById('add-ftp-server-btn')?.addEventListener('click', ()=>{
+    const list = document.getElementById('ftp-servers-list');
+    const idx = list.querySelectorAll('.ftp-server-block').length;
+    list.insertAdjacentHTML('beforeend', makeFtpServerBlock(idx));
+  });
+
+  document.getElementById('ftp-servers-list')?.addEventListener('input', (e)=>{
+    if (e.target.classList.contains('srv-name')) {
+      const block = e.target.closest('.ftp-server-block');
+      const display = block?.querySelector('.srv-name-display');
+      if (display) display.textContent = e.target.value.trim() || 'FTP';
+    }
+  });
+
+  document.body.addEventListener('click', (e)=>{
+    if (e.target.classList.contains('remove-row')) {
+      const row = e.target.closest('.row-inline');
+      if (!row) return;
+      const inputs = Array.from(row.querySelectorAll('input,select'));
+      const container = row.parentElement;
+      if (container.children.length > 1 || inputs.some(i => (i.value || '').trim() !== '')) row.remove();
+    }
+    if (e.target.classList.contains('delete-server-btn')) {
+      e.target.closest('.ftp-server-block')?.remove();
+    }
+    if (e.target.classList.contains('add-srv-root-btn')) {
+      const rootsList = e.target.previousElementSibling;
+      if (rootsList?.classList.contains('srv-roots-list')) {
+        rootsList.insertAdjacentHTML('beforeend', `<div class="row-inline"><input type="text" class="srv-root-input" placeholder="${_i18n.ftp_server_roots_ph}" spellcheck="false" style="flex:1"><button type="button" class="button-secondary remove-row">${_i18n.ftp_server_root_delete}</button></div>`);
+      }
+    }
+    if (e.target.classList.contains('test-srv-btn')) {
+      const block = e.target.closest('.ftp-server-block');
+      if (block) { e.preventDefault(); testFtpServer(block); }
+    }
+    if (e.target.classList.contains('reindex-srv-btn')) {
+      const block = e.target.closest('.ftp-server-block');
+      if (block) { e.preventDefault(); reindexFtpServer(block); }
+    }
+    if (e.target.classList.contains('js-save-config')) { e.preventDefault(); e.stopPropagation(); handleSave(); }
+  });
+
+  dests.addEventListener('change', (e)=>{
+    if (e.target.name === 'dest_keys_select[]') {
+      const hidden = e.target.parentElement.querySelector('input[name="dest_keys[]"]');
+      if (hidden) hidden.value = e.target.value;
+    }
+  });
+
+  function onFormSubmit(e) {
+    console.log('[CFG] onFormSubmit() déclenché');
+    e.preventDefault(); e.stopPropagation();
+    handleSave();
+    return false;
+  }
+  form.addEventListener('submit', onFormSubmit);
+
+
+  document.getElementById('auto-alias-list')?.addEventListener('click', async (e) => {
+    const promoteBtn = e.target.closest('.btn-promote-alias');
+    const deleteBtn = e.target.closest('.btn-delete-alias');
+
+    if (promoteBtn) {
+      const title = promoteBtn.dataset.title;
+      promoteBtn.disabled = true;
+      try {
+        const res = await fetch('/config/alias/promote', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({title})
+        });
+        const d = await res.json();
+        if (d.ok) { location.reload(); }
+        else { promoteBtn.disabled = false; }
+      } catch(e) { promoteBtn.disabled = false; }
+    }
+
+    if (deleteBtn) {
+      const title = deleteBtn.dataset.title;
+      if (!confirm(_i18n.alias_delete_confirm.replace('{title}', title))) return;
+      deleteBtn.disabled = true;
+      try {
+        const res = await fetch('/config/alias/delete', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({title})
+        });
+        const d = await res.json();
+        if (d.ok) { deleteBtn.closest('.alias-row').remove(); }
+        else { deleteBtn.disabled = false; }
+      } catch(e) { deleteBtn.disabled = false; }
+    }
+  });
+
+  loadLastLogs();
+  startLogsStream();
+
+  // ── Ignore list ─────────────────────────────────────────────────────────
+  async function loadIgnoreList() {
+    const container = document.getElementById('ignore-list-container');
+    try {
+      const res = await fetch('/ftp/ignore/list');
+      const data = await res.json();
+      if (!data.ok || !data.items.length) {
+        container.innerHTML = `<em class="muted">${_i18n.exclusions_none}</em>`;
+        return;
+      }
+      const rows = data.items.map(item => {
+        const typeLabel = item.type ? ` <span class="muted">(${item.type})</span>` : '';
+        const reasonLabel = item.reason ? ` — <span class="muted">${item.reason}</span>` : '';
+        const titleEsc = item.title.replace(/"/g, '&quot;');
+        return `<div class="alias-row row-inline" style="align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+          <span style="flex:1">${item.title}${typeLabel}${reasonLabel}</span>
+          <button type="button" class="button-secondary btn-ignore-delete" data-title="${titleEsc}" style="white-space:nowrap;">${_i18n.exclusions_remove}</button>
+        </div>`;
+      });
+      container.innerHTML = rows.join('');
+    } catch(e) {
+      container.innerHTML = `<em class="muted">${_i18n.exclusions_load_error}</em>`;
+    }
+  }
+
+  document.getElementById('ignore-list-container').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.btn-ignore-delete');
+    if (!btn) return;
+    const title = btn.dataset.title;
+    if (!confirm(_i18n.exclusions_remove_confirm.replace('{title}', title))) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch('/ftp/ignore/remove', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title})
+      });
+      const d = await res.json();
+      if (d.ok) { btn.closest('.alias-row').remove(); }
+      else { btn.disabled = false; }
+    } catch(e) { btn.disabled = false; }
+  });
+
+  document.getElementById('ignore-add-btn').addEventListener('click', async () => {
+    const titleInput = document.getElementById('ignore-add-title');
+    const typeInput = document.getElementById('ignore-add-type');
+    const reasonInput = document.getElementById('ignore-add-reason');
+    const title = titleInput.value.trim();
+    if (!title) { titleInput.focus(); return; }
+    const btn = document.getElementById('ignore-add-btn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/ftp/ignore/add', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title, type: typeInput.value, reason: reasonInput.value.trim()})
+      });
+      const d = await res.json();
+      if (d.ok) {
+        titleInput.value = ''; reasonInput.value = '';
+        await loadIgnoreList();
+      }
+    } catch(e) {}
+    btn.disabled = false;
+  });
+
+  loadIgnoreList();
+
+  // ── Drag-and-drop card reordering (colonnes indépendantes) ───────────────
+  const STORAGE_KEY = 'config_col_layout';
+  const colLeft  = document.getElementById('config-col-left');
+  const colRight = document.getElementById('config-col-right');
+  const lockBtn  = document.getElementById('btn-lock');
+  const allCols  = [colLeft, colRight];
+  let dragged = null;
+
+  // Default column distribution
+  const DEFAULT_LEFT  = ['card-plex', 'card-aliases', 'card-ftp', 'card-schedule', 'card-ignore'];
+  const DEFAULT_RIGHT = ['card-compare', 'card-autoremux', 'card-mkv', 'card-logs'];
+
+  function saveLayout() {
+    const left  = Array.from(colLeft.querySelectorAll(':scope > .config-card')).map(c => c.id);
+    const right = Array.from(colRight.querySelectorAll(':scope > .config-card')).map(c => c.id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ left, right }));
+  }
+
+  function restoreLayout() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && saved.left && saved.right) {
+        saved.left.forEach(id  => { const c = document.getElementById(id); if (c) colLeft.appendChild(c); });
+        saved.right.forEach(id => { const c = document.getElementById(id); if (c) colRight.appendChild(c); });
+        return;
+      }
+    } catch(e) {}
+    // Default distribution
+    DEFAULT_LEFT.forEach(id  => { const c = document.getElementById(id); if (c) colLeft.appendChild(c); });
+    DEFAULT_RIGHT.forEach(id => { const c = document.getElementById(id); if (c) colRight.appendChild(c); });
+  }
+
+  function setLocked(locked) {
+    allCols.forEach(col => {
+      col.classList.toggle('locked', locked);
+      col.classList.toggle('unlocked', !locked);
+      col.querySelectorAll('.config-card').forEach(c => c.setAttribute('draggable', locked ? 'false' : 'true'));
+    });
+    lockBtn.textContent = locked ? _i18n.lock_btn : _i18n.unlock_btn;
+    lockBtn.classList.toggle('button-primary', !locked);
+    lockBtn.classList.toggle('button-secondary', locked);
+  }
+
+  lockBtn.addEventListener('click', () => {
+    const willLock = colLeft.classList.contains('unlocked');
+    setLocked(willLock);
+    localStorage.setItem('config_cards_locked', willLock ? '1' : '0');
+  });
+
+  // Restore lock state
+  setLocked(localStorage.getItem('config_cards_locked') !== '0'); // default: locked
+
+  // Restore card layout
+  restoreLayout();
+
+  // Drag events (delegated per column)
+  allCols.forEach(col => {
+    col.addEventListener('dragstart', (e) => {
+      const card = e.target.closest('.config-card');
+      if (!card || col.classList.contains('locked')) { e.preventDefault(); return; }
+      dragged = card;
+      setTimeout(() => card.classList.add('dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    col.addEventListener('dragend', () => {
+      if (dragged) { dragged.classList.remove('dragging'); dragged = null; }
+      document.querySelectorAll('.config-card').forEach(c => c.classList.remove('drag-over'));
+      allCols.forEach(c => c.classList.remove('col-drag-over'));
+      saveLayout();
+    });
+
+    col.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const targetCard = e.target.closest('.config-card');
+      document.querySelectorAll('.config-card').forEach(c => c.classList.remove('drag-over'));
+      allCols.forEach(c => c.classList.remove('col-drag-over'));
+      if (targetCard && targetCard !== dragged) {
+        targetCard.classList.add('drag-over');
+      } else if (!targetCard) {
+        col.classList.add('col-drag-over');
+      }
+    });
+
+    col.addEventListener('dragleave', (e) => {
+      if (!col.contains(e.relatedTarget)) {
+        col.classList.remove('col-drag-over');
+        col.querySelectorAll('.config-card').forEach(c => c.classList.remove('drag-over'));
+      }
+    });
+
+    col.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const targetCard = e.target.closest('.config-card');
+      document.querySelectorAll('.config-card').forEach(c => c.classList.remove('drag-over'));
+      allCols.forEach(c => c.classList.remove('col-drag-over'));
+      if (!dragged) return;
+      if (targetCard && targetCard !== dragged) {
+        const rect = targetCard.getBoundingClientRect();
+        const before = e.clientY < rect.top + rect.height / 2;
+        col.insertBefore(dragged, before ? targetCard : targetCard.nextSibling);
+      } else if (!targetCard) {
+        col.appendChild(dragged);
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

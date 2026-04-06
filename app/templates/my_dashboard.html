@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t("mydashboard.page_title") }}{% endblock %}
+{% block body_class %}page-my-dashboard{% endblock %}
+
+{% block head %}
+  <style>
+    .charts-container { display: flex; flex-wrap: wrap; gap: 2rem; justify-content: center; margin-top: 1.2rem; }
+    .chart-wrapper { flex: 1 1 45%; min-width: 320px; max-width: 600px; padding: 1rem; }
+    .episodes-cell { font-size: 0.8rem; line-height: 1.2; }
+    .episodes-missing { color: #ffcc66; font-style: italic; }
+    .filter-box { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+    .filter-box input { width: 350px !important; padding: 6px 10px; font-size: 0.9rem; }
+    .filter-box select { padding: 6px 10px; font-size: 0.9rem; margin-left: 8px; }
+    .filter-box .service-filter { min-width: 180px; }
+    .tab-count { font-size:.78rem; font-weight:400; opacity:.7; margin-left:.3rem; }
+    .tab.active .tab-count { opacity:1; }
+    .filter-indicator { font-size:.8rem; color:var(--muted); margin:.2rem 0 .5rem; min-height:1em; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<header>
+  <h1>{{ t("mydashboard.header") }}</h1>
+  <div class="button-group">
+    <a href="{{ url_for('my_dashboard.my_dashboard', refresh='true') }}" class="button-secondary">{{ t("mydashboard.refresh") }}</a>
+  </div>
+</header>
+
+{% if not tmdb_configured %}
+  <div class="warning-box" style="margin-top: 1rem;">
+    <h3>{{ t("mydashboard.tmdb_warning") }}</h3>
+    <p>{{ t("mydashboard.tmdb_msg") }}</p>
+    <div class="button-group">
+      <a href="{{ url_for('config.config_page') }}" class="button-primary">{{ t("mydashboard.go_to_config") }}</a>
+      <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener noreferrer" class="button-secondary">{{ t("mydashboard.get_tmdb_key") }}</a>
+    </div>
+  </div>
+{% endif %}
+
+{% if tmdb_configured %}
+  <div class="manual-search-box" style="text-align:center; margin-top: 1rem;">
+    <h2>{{ t("mydashboard.search_title") }}</h2>
+    <input type="search" id="manual-search-query" placeholder="{{ t('mydashboard.search_placeholder') }}">
+    <select id="manual-search-type">
+      <option value="movie">{{ t("mydashboard.search_movie") }}</option>
+      <option value="tv">{{ t("mydashboard.search_tv") }}</option>
+    </select>
+    <button id="manual-search-btn" class="button-primary">{{ t("mydashboard.search_btn") }}</button>
+    <div id="manual-search-results" style="margin-top:.6rem;"></div>
+  </div>
+{% endif %}
+
+<div class="tabs">
+  <div class="tab active" data-tab-target="Statistiques">{{ t("mydashboard.tab_stats") }}</div>
+  {% if tmdb_configured and watchlist_items %}
+    <div class="tab" data-tab-target="Watchlist">{{ t("mydashboard.tab_watchlist") }}</div>
+  {% endif %}
+  {% if tmdb_configured %}
+    {% for lib_name, stream_data in results_stream.items() %}
+      <div class="tab" data-tab-target="{{ lib_name | replace(' ', '-') }}">{{ lib_name }}<span class="tab-count" id="my-tc-{{ lib_name | replace(' ', '-') }}">({{ stream_data['items']|length }})</span></div>
+    {% endfor %}
+  {% endif %}
+</div>
+
+<div class="note-center" style="padding: 5px 10px; font-size: .8em; color: #888; text-align:center;">
+  {{ t("mydashboard.note") }}
+</div>
+
+<div class="tab-content active" id="tab-Statistiques">
+  <h2>{{ t("mydashboard.stats_title") }}</h2>
+  <div class="stats-text-container">
+    <div class="stats-section">
+      <div class="stats-column">
+        <h4 class="collapsible-header">{{ t("mydashboard.stats_totals") }} <span class="toggle-icon">+</span></h4>
+        <ul class="collapsible-content">
+          <li><strong>{{ t("mydashboard.stats_analyzed") }}</strong> {{ stats.total_items }}</li>
+          <li><strong>{{ t("mydashboard.stats_movies") }}</strong> {{ stats.total_movies }}</li>
+          <li><strong>{{ t("mydashboard.stats_shows") }}</strong> {{ stats.total_shows }}</li>
+          <li><strong>{{ t("mydashboard.stats_artists") }}</strong> {{ stats.get('total_artists', 0) }}</li>
+          <li><strong>{{ t("mydashboard.stats_albums") }}</strong> {{ stats.get('total_albums', 0) }}</li>
+        </ul>
+      </div>
+      <div class="stats-column">
+        <h4 class="collapsible-header">{{ t("mydashboard.stats_top_services") }} <span class="toggle-icon">+</span></h4>
+        <ul class="collapsible-content">
+          {% for svc, count in stats.top_services %}
+            <li>{{ svc }} : {{ count }}</li>
+          {% else %}
+            <li>{{ t("mydashboard.no_data") }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="stats-column">
+        <h4 class="collapsible-header">{{ t("mydashboard.stats_resolutions") }} <span class="toggle-icon">+</span></h4>
+        <ul class="collapsible-content">
+          {% for res, count in stats.resolutions.items() %}
+            <li>{{ res }} : {{ count }}</li>
+          {% else %}
+            <li>{{ t("mydashboard.no_data") }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    <div class="stats-section">
+      <div class="stats-column">
+        <h4 class="collapsible-header">{{ t("mydashboard.stats_movie_genres") }} <span class="toggle-icon">+</span></h4>
+        <ul class="collapsible-content">
+          {% for genre, count in stats.get('movie_genres', {}).items() %}
+            <li>{{ genre }} : {{ count }}</li>
+          {% else %}
+            <li>{{ t("mydashboard.no_genre_data") }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="stats-column">
+        <h4 class="collapsible-header">{{ t("mydashboard.stats_show_genres") }} <span class="toggle-icon">+</span></h4>
+        <ul class="collapsible-content">
+          {% for genre, count in stats.get('show_genres', {}).items() %}
+            <li>{{ genre }} : {{ count }}</li>
+          {% else %}
+            <li>{{ t("mydashboard.no_genre_data") }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="stats-column">
+        <h4 class="collapsible-header">{{ t("mydashboard.stats_music_genres") }} <span class="toggle-icon">+</span></h4>
+        <ul class="collapsible-content">
+          {% for genre, count in stats.get('genres', {}).items() %}
+            <li>{{ genre }} : {{ count }}</li>
+          {% else %}
+            <li>{{ t("mydashboard.no_genre_data") }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-container">
+    <div class="chart-wrapper"><canvas id="topServicesChart"></canvas></div>
+    <div class="chart-wrapper"><canvas id="resolutionChart"></canvas></div>
+    {% if stats.get('movie_genres') %}<div class="chart-wrapper"><canvas id="movieGenreChart"></canvas></div>{% endif %}
+    {% if stats.get('show_genres') %}<div class="chart-wrapper"><canvas id="showGenreChart"></canvas></div>{% endif %}
+    {% if stats.get('genres') %}<div class="chart-wrapper"><canvas id="genreChart"></canvas></div>{% endif %}
+  </div>
+</div>
+
+{% if tmdb_configured %}
+  {% if watchlist_items %}
+    <div class="tab-content" id="tab-Watchlist">
+      <h2>{{ t("mydashboard.watchlist_title") }}</h2>
+      <div class="table-scroll">
+        <table class="sticky-table">
+          <thead>
+            <tr>
+              <th>{{ t("mydashboard.th_title") }}</th><th>{{ t("mydashboard.th_year") }}</th><th>{{ t("mydashboard.th_episodes") }}</th><th>{{ t("mydashboard.th_platforms") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in watchlist_items %}
+              <tr>
+                <td>{{ item.title | underscore_to_dash }}</td>
+                <td>{{ item.year }}</td>
+                <td>
+                  {% if item.type == 'Série' %}
+                    {% set plex_ep = item.get('plex_episodes') %}
+                    {% set tmdb_ep = item.get('tmdb_total_episodes') %}
+                    <div class="episodes-cell">
+                      {{ t("mydashboard.plex_label") }} {{ plex_ep if plex_ep is not none else "?" }}<br>
+                      {{ t("mydashboard.tmdb_label") }} {{ tmdb_ep if tmdb_ep is not none else "?" }}
+                      {% if tmdb_ep is not none and plex_ep is not none and tmdb_ep - plex_ep > 0 %}
+                        <br><span class="episodes-missing">{{ t("mydashboard.missing_label") }} {{ tmdb_ep - plex_ep }}</span>
+                      {% endif %}
+                    </div>
+                  {% else %}-{% endif %}
+                </td>
+                <td>
+                  {% if item.services %}
+                    {% for svc in item.services.keys() %}✅ {{ svc }}<br>{% endfor %}
+                  {% else %}{{ t("mydashboard.no_service") }}{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  {% for lib_name, stream_data in results_stream.items() %}
+    <div class="tab-content" id="tab-{{ lib_name | replace(' ', '-') }}">
+      {% if stream_data["items"] %}
+        <h2>{{ lib_name }}</h2>
+        <p class="filter-indicator" id="my-fi-{{ lib_name | replace(' ', '-') }}"></p>
+        <div class="filter-box" data-lib-id="{{ lib_name | replace(' ', '-') }}" data-total="{{ stream_data['items']|length }}" data-primary="1">
+          <input type="search" placeholder="{{ t('mydashboard.filter_placeholder') }}">
+          <select class="service-filter">
+            <option value="">{{ t("mydashboard.all_services") }}</option>
+            {% for service in stream_data["services"] %}<option value="{{ service }}">{{ service }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="table-scroll">
+          <table class="sticky-table">
+            <thead>
+              <tr>
+                <th>{{ t("mydashboard.th_title") }}</th><th>{{ t("mydashboard.th_year") }}</th>
+                {% if stream_data["items"][0].type == "Série" %}<th>{{ t("mydashboard.th_episodes") }}</th>{% endif %}
+                {% for service in stream_data["services"] %}
+                  <th>
+                    {% if stream_data['logos'][service] %}<img src="{{ stream_data['logos'][service] }}" alt="{{ service }}" class="service-logo"><br>{% endif %}
+                    {{ service }}
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in stream_data["items"] %}
+                <tr>
+                  <td>{{ item.title | underscore_to_dash }}</td>
+                  <td>{{ item.year }}</td>
+                  {% if stream_data["items"][0].type == "Série" %}
+                  <td>
+                    {% set plex_ep = item.get('plex_episodes') %}
+                    {% set tmdb_ep = item.get('tmdb_total_episodes') %}
+                    <div class="episodes-cell">
+                      {{ t("mydashboard.plex_label") }} {{ plex_ep if plex_ep is not none else "?" }}<br>
+                      {{ t("mydashboard.tmdb_label") }} {{ tmdb_ep if tmdb_ep is not none else "?" }}
+                      {% if tmdb_ep is not none and plex_ep is not none and tmdb_ep - plex_ep > 0 %}
+                        <br><span class="episodes-missing">{{ t("mydashboard.missing_label") }} {{ tmdb_ep - plex_ep }}</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  {% endif %}
+                  {% for service in stream_data["services"] %}
+                    <td>{% if service in item.services %}✅{% else %}❌{% endif %}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top: 2rem;">{{ t("mydashboard.purchase_title") }}</h3>
+        <div class="filter-box">
+          <input type="search" placeholder="{{ t('mydashboard.filter_placeholder') }}">
+          <select class="service-filter">
+            <option value="">{{ t("mydashboard.all_services") }}</option>
+            {% for service in results_purchase[lib_name]["services"] %}<option value="{{ service }}">{{ service }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="table-scroll">
+          <table class="sticky-table">
+            <thead>
+              <tr>
+                <th>{{ t("mydashboard.th_title") }}</th><th>{{ t("mydashboard.th_year") }}</th>
+                {% if results_purchase[lib_name]["items"] and results_purchase[lib_name]["items"][0].type == "Série" %}<th>{{ t("mydashboard.th_episodes") }}</th>{% endif %}
+                {% for service in results_purchase[lib_name]["services"] %}
+                  <th>
+                    {% if results_purchase[lib_name]['logos'][service] %}<img src="{{ results_purchase[lib_name]['logos'][service] }}" alt="{{ service }}" class="service-logo"><br>{% endif %}
+                    {{ service }}
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in results_purchase[lib_name]["items"] %}
+                <tr>
+                  <td>{{ item.title | underscore_to_dash }}</td>
+                  <td>{{ item.year }}</td>
+                  {% if results_purchase[lib_name]["items"][0].type == "Série" %}
+                  <td>
+                    {% set plex_ep = item.get('plex_episodes') %}
+                    {% set tmdb_ep = item.get('tmdb_total_episodes') %}
+                    <div class="episodes-cell">
+                      {{ t("mydashboard.plex_label") }} {{ plex_ep if plex_ep is not none else "?" }}<br>
+                      {{ t("mydashboard.tmdb_label") }} {{ tmdb_ep if tmdb_ep is not none else "?" }}
+                      {% if tmdb_ep is not none and plex_ep is not none and tmdb_ep - plex_ep > 0 %}
+                        <br><span class="episodes-missing">{{ t("mydashboard.missing_label") }} {{ tmdb_ep - plex_ep }}</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  {% endif %}
+                  {% for service in results_purchase[lib_name]["services"] %}
+                    <td>{% if service in item.purchase %}✅{% else %}❌{% endif %}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p style="text-align:center;">{{ t("mydashboard.no_results") }}</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const tabs = document.querySelectorAll('.tab');
+  const tabContents = document.querySelectorAll('.tab-content');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetId = "tab-" + tab.dataset.tabTarget;
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      tabContents.forEach(content => content.classList.toggle('active', content.id === targetId));
+    });
+  });
+
+  document.querySelectorAll(".filter-box").forEach(box => {
+    const input = box.querySelector('input');
+    const serviceSelect = box.querySelector('.service-filter');
+    const wrapper = box.nextElementSibling;
+    const table = wrapper ? wrapper.querySelector('table') : null;
+    const tbody = table ? table.querySelector('tbody') : null;
+    const thead = table ? table.querySelector('thead') : null;
+    if (!tbody || !thead) return;
+
+    const applyFilter = () => {
+      const textFilter = (input?.value || "").toLowerCase();
+      const serviceFilter = serviceSelect?.value || "";
+      const headers = [...thead.querySelectorAll("th")];
+      const rows = tbody.querySelectorAll("tr");
+      let episodesColIndex = -1;
+      headers.forEach((th, idx) => { if (th.textContent.trim().startsWith("Épisodes")) episodesColIndex = idx; });
+      let serviceColIndex = -1;
+      if (serviceFilter) headers.forEach((th, idx) => { if (th.textContent.trim().includes(serviceFilter)) serviceColIndex = idx; });
+      headers.forEach((th, idx) => {
+        if (!serviceFilter) { th.style.display = ""; return; }
+        th.style.display = (idx === 0 || idx === 1 || (episodesColIndex !== -1 && idx === episodesColIndex) || idx === serviceColIndex) ? "" : "none";
+      });
+      rows.forEach(row => {
+        const cells = row.querySelectorAll("td");
+        cells.forEach((td, idx) => {
+          if (!serviceFilter) { td.style.display = ""; return; }
+          td.style.display = (idx === 0 || idx === 1 || (episodesColIndex !== -1 && idx === episodesColIndex) || idx === serviceColIndex) ? "" : "none";
+        });
+        const matchTitle = (cells[0]?.textContent || "").toLowerCase().includes(textFilter);
+        let matchService = true;
+        if (serviceFilter && serviceColIndex !== -1) matchService = (cells[serviceColIndex]?.textContent || "").trim().includes("✅");
+        row.style.display = (matchTitle && matchService) ? "" : "none";
+      });
+      if (wrapper) wrapper.scrollLeft = 0;
+
+      // Mettre à jour les compteurs si c'est la table principale (streaming)
+      if (box.dataset.primary && box.dataset.libId) {
+        const libId = box.dataset.libId;
+        const total = parseInt(box.dataset.total || '0');
+        const visible = [...rows].filter(r => r.style.display !== 'none').length;
+        const isActive = textFilter !== '' || serviceFilter !== '';
+        const fi = document.getElementById(`my-fi-${libId}`);
+        if (fi) fi.textContent = isActive ? `${visible} résultat${visible !== 1 ? 's' : ''} sur ${total}` : '';
+        const tcSpan = document.getElementById(`my-tc-${libId}`);
+        if (tcSpan) tcSpan.textContent = isActive ? `(${visible}\u202f/\u202f${total})` : `(${total})`;
+      }
+    };
+
+    if (input) input.addEventListener("input", applyFilter);
+    if (serviceSelect) serviceSelect.addEventListener("change", applyFilter);
+  });
+
+  document.querySelectorAll('.collapsible-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const content = header.nextElementSibling;
+      const icon = header.querySelector('.toggle-icon');
+      const isVisible = content.style.display === 'block';
+      content.style.display = isVisible ? 'none' : 'block';
+      if (icon) icon.textContent = isVisible ? '+' : '−';
+    });
+  });
+
+  const btn = document.getElementById('manual-search-btn');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const q = document.getElementById('manual-search-query').value.trim();
+      const type = document.getElementById('manual-search-type').value;
+      const box = document.getElementById('manual-search-results');
+      if (!q) { box.innerHTML = '<p class="error">{{ t("server.load_error") }}</p>'; return; }
+      box.innerHTML = '<div class="loading">{{ t("mydashboard.search_btn") }}…</div>';
+      try {
+        const res = await fetch('{{ url_for("my_dashboard.search_tmdb") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: q, type })
+        });
+        if (!res.ok) throw new Error('La recherche a échoué.');
+        const data = await res.json();
+        let html = '<h4>Résultats pour "' + q + '"</h4>';
+        if (!Object.keys(data.streaming||{}).length && !Object.keys(data.purchase||{}).length) {
+          html += '<p>Aucun service de streaming ou d\'achat trouvé.</p>';
+        } else if (Object.keys(data.streaming||{}).length) {
+          html += '<h5>Disponible en streaming sur :</h5><ul>';
+          for (const [service, details] of Object.entries(data.streaming)) {
+            const logo = details?.logo ? `<img src="${details.logo}" class="service-logo" alt=""> ` : '';
+            html += `<li>${logo}${service}</li>`;
+          }
+          html += '</ul>';
+        }
+        box.innerHTML = html;
+      } catch (e) {
+        box.innerHTML = '<p class="error">' + (e.message || 'Erreur') + '</p>';
+      }
+    });
+  }
+
+  const topServiceLabels = {{ stats.top_services | map(attribute=0) | list | tojson }};
+  const topServiceCounts = {{ stats.top_services | map(attribute=1) | list | tojson }};
+  new Chart(document.getElementById('topServicesChart'), {
+    type: 'bar',
+    data: { labels: topServiceLabels, datasets: [{ label: 'Top services', data: topServiceCounts, borderWidth: 1 }] },
+    options: { indexAxis: 'y', responsive: true, scales: { x: { beginAtZero: true } }, plugins: { title: { display: true, text: {{ t("mydashboard.chart_top_services") | tojson }} } } }
+  });
+
+  const resolutionLabels = {{ stats.resolutions.keys() | list | tojson }};
+  const resolutionCounts = {{ stats.resolutions.values() | list | tojson }};
+  new Chart(document.getElementById('resolutionChart'), {
+    type: 'doughnut',
+    data: { labels: resolutionLabels, datasets: [{ label: {{ t("mydashboard.stats_resolutions") | tojson }}, data: resolutionCounts }] },
+    options: { responsive: true, plugins: { title: { display: true, text: {{ t("mydashboard.chart_resolutions") | tojson }} } } }
+  });
+
+  {% if stats.get('genres') %}
+  new Chart(document.getElementById('genreChart'), {
+    type: 'pie',
+    data: { labels: {{ stats.get('genres', {}).keys() | list | tojson }}, datasets: [{ label: {{ t("mydashboard.stats_music_genres") | tojson }}, data: {{ stats.get('genres', {}).values() | list | tojson }}, borderWidth: 1 }] },
+    options: { responsive: true, plugins: { title: { display: true, text: {{ t("mydashboard.chart_music_genres") | tojson }} } } }
+  });
+  {% endif %}
+  {% if stats.get('movie_genres') %}
+  new Chart(document.getElementById('movieGenreChart'), {
+    type: 'pie',
+    data: { labels: {{ stats.get('movie_genres', {}).keys() | list | tojson }}, datasets: [{ label: {{ t("mydashboard.stats_movie_genres") | tojson }}, data: {{ stats.get('movie_genres', {}).values() | list | tojson }}, borderWidth: 1 }] },
+    options: { responsive: true, plugins: { title: { display: true, text: {{ t("mydashboard.chart_movie_genres") | tojson }} } } }
+  });
+  {% endif %}
+  {% if stats.get('show_genres') %}
+  new Chart(document.getElementById('showGenreChart'), {
+    type: 'pie',
+    data: { labels: {{ stats.get('show_genres', {}).keys() | list | tojson }}, datasets: [{ label: {{ t("mydashboard.stats_show_genres") | tojson }}, data: {{ stats.get('show_genres', {}).values() | list | tojson }}, borderWidth: 1 }] },
+    options: { responsive: true, plugins: { title: { display: true, text: {{ t("mydashboard.chart_show_genres") | tojson }} } } }
+  });
+  {% endif %}
+});
+</script>
+{% endblock %}

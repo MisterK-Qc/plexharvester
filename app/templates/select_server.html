@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <title>{{ t("server.page_title") }}</title>
+</head>
+<body class="page-select-server">
+  <header>
+    <h1>{{ t("server.page_title") }}</h1>
+    <a href="{{ url_for('auth.logout') }}" class="button-secondary">{{ t("server.logout") }}</a>
+  </header>
+
+  <main>
+    {% if error %}<div class="warning-box">{{ error }}</div>{% endif %}
+
+    <form method="POST" action="{{ url_for('auth.select_server') }}" class="form-vertical">
+      <label for="server">{{ t("server.label") }}</label>
+      <select name="server" id="server" required>
+        <option value="">{{ t("server.placeholder") }}</option>
+        {% for server in servers if server.provides == 'server' %}
+          <option value="{{ server.name }}" {% if server.name == selected_server %}selected{% endif %}>
+            {{ server.name }}{% if server.owned %} {{ t("server.my_server") }}{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+
+      <div id="libraries-container" class="stack">
+        <div class="toolbar" id="select-all-container">
+          <label class="inline">
+            <input type="checkbox" id="select-all-libs"> {{ t("server.select_all") }}
+          </label>
+          <span id="lib-count" class="muted"></span>
+        </div>
+
+        <div id="libraries-checkboxes" class="checkbox-group"></div>
+        <div id="loading-libraries" class="muted">{{ t("server.loading") }}</div>
+        <div id="libs-error" class="warning-box" hidden></div>
+      </div>
+
+      <button type="submit" class="button-primary">{{ t("server.submit") }}</button>
+    </form>
+  </main>
+
+  <script>
+    const _i18n = {
+      no_libraries: {{ t("server.no_libraries") | tojson }},
+      load_error:   {{ t("server.load_error")   | tojson }},
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      const serverSelect = document.getElementById('server');
+      const libsContainer = document.getElementById('libraries-container');
+      const checkboxesDiv = document.getElementById('libraries-checkboxes');
+      const loadingDiv = document.getElementById('loading-libraries');
+      const selectAllContainer = document.getElementById('select-all-container');
+      const selectAllCheckbox = document.getElementById('select-all-libs');
+      const libCount = document.getElementById('lib-count');
+      const libsError = document.getElementById('libs-error');
+      const selectedLibraries = {{ selected_libraries | tojson | safe }};
+
+      function clearLibs(){
+        checkboxesDiv.innerHTML = '';
+        libCount.textContent = '';
+        libsError.hidden = true;
+        selectAllCheckbox.checked = false;
+      }
+
+      function updateSelectAllState(){
+        const all = [...checkboxesDiv.querySelectorAll('input[type="checkbox"]')];
+        selectAllCheckbox.checked = all.length>0 && all.every(cb=>cb.checked);
+      }
+
+      async function loadLibraries(name){
+        if(!name){ libsContainer.style.display='none'; clearLibs(); return; }
+        libsContainer.style.display='block';
+        loadingDiv.style.display='block';
+        selectAllContainer.style.display='none';
+        clearLibs();
+        try{
+          const res = await fetch(`/get_libraries?server=${encodeURIComponent(name)}`);
+          if(!res.ok) throw new Error();
+          const libraries = await res.json();
+          loadingDiv.style.display='none';
+          if(Array.isArray(libraries) && libraries.length){
+            libraries.forEach(lib=>{
+              const title = lib.title || '';
+              const type = lib.type || '';
+              const checked = selectedLibraries.includes(title) ? 'checked' : '';
+              checkboxesDiv.insertAdjacentHTML('beforeend', `
+                <label class="inline">
+                  <input type="checkbox" name="libraries" value="${title.replace(/"/g,'&quot;')}" ${checked}>
+                  ${title} <span class="muted">(${type})</span>
+                </label>
+              `);
+            });
+            libCount.textContent = `(${libraries.length})`;
+            selectAllContainer.style.display='flex';
+            updateSelectAllState();
+          }else{
+            checkboxesDiv.innerHTML = `<p class="muted">${_i18n.no_libraries}</p>`;
+          }
+        }catch{
+          loadingDiv.style.display='none';
+          libsError.textContent = _i18n.load_error;
+          libsError.hidden = false;
+        }
+      }
+
+      serverSelect.addEventListener('change', ()=>loadLibraries(serverSelect.value));
+      selectAllCheckbox.addEventListener('change', ()=>{
+        checkboxesDiv.querySelectorAll('input[type="checkbox"]').forEach(cb=>cb.checked = selectAllCheckbox.checked);
+      });
+      checkboxesDiv.addEventListener('change', e=>{ if(e.target.matches('input[type="checkbox"]')) updateSelectAllState(); });
+
+      if(serverSelect.value) loadLibraries(serverSelect.value);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \":*)",
+      "Bash(wc -l \"\\\\\\\\10.0.0.2\\\\appdata\\\\plex-compare\\\\app\\\\templates\\\\config.html\")",
+      "Bash(type \"\\\\\\\\10.0.0.2\\\\appdata\\\\plex-compare\\\\requirements.txt\")",
+      "Bash(python3 -c \"import docx; print\\('ok'\\)\")",
+      "Bash(pip install:*)"
+    ]
+  }
+}

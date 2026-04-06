@@ -1,0 +1,14 @@
+services:
+  plexharvester:
+    image: DOCKERHUB_USERNAME/plexharvester:latest
+    container_name: plexharvester
+    ports:
+      - "5000:5000"
+    volumes:
+      - /mnt/user/appdata/plexharvester:/config
+    environment:
+      TZ: ${TZ:-America/Montreal}
+      PYTHONUNBUFFERED: "1"
+      PLEX_COMPARE_CONFIG_DIR: /config
+      SECRET_KEY: ${SECRET_KEY}
+    restart: unless-stopped

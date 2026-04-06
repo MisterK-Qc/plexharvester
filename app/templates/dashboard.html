@@ -1,0 +1,751 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t("app.title") }}{% endblock %}
+{% block body_class %}page-dashboard{% endblock %}
+
+{% block head %}
+<style>
+.tab-count { font-size:.78rem; font-weight:400; opacity:.7; margin-left:.3rem; }
+.tab.active .tab-count { opacity:1; }
+.filter-indicator { font-size:.8rem; color:var(--muted); margin:-.3rem 0 .5rem; min-height:1em; }
+</style>
+<script>
+  function toggleEpisodes(id, event){
+    if (event) {
+      const clickedButton = event.target.closest("button, a");
+      if (clickedButton) return;
+    }
+    const row = document.getElementById(id);
+    if(row) row.style.display = (row.style.display==='none' || row.style.display==='') ? 'table-row' : 'none';
+  }
+
+  function showTab(tabId){
+    document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+    const pane = document.getElementById(tabId);
+    if(pane) pane.classList.add('active');
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    const tab = document.getElementById(tabId + '-tab');
+    if(tab) tab.classList.add('active');
+  }
+
+  function applyResFilter(table, mode) {
+    if (!table) return;
+    table.querySelectorAll('tr.compare-row').forEach(row => {
+      const rr = parseInt(row.dataset.resRemote || '0', 10);
+      const lr = parseInt(row.dataset.resLocal  || '0', 10);
+      let show = true;
+      if (mode === 'equal_or_higher') show = (rr >= lr);
+      else if (mode === 'higher_only') show = (rr > lr);
+      row.style.display = show ? '' : 'none';
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    document.addEventListener("click", function(e) {
+      const btn = e.target.closest(".btn-ignore");
+      if (!btn) return;
+      const title = btn.dataset.title;
+      const type = btn.dataset.type || "";
+      ignoreItem(title, type, btn);
+    });
+
+    function updateTabCount(libId) {
+      let total = 0, visible = 0, anyFiltered = false;
+      document.querySelectorAll(`.filter-box[data-lib-id="${libId}"]`).forEach(fb => {
+        const fbTotal = parseInt(fb.dataset.total || '0');
+        total += fbTotal;
+        visible += (fb._visibleCount !== undefined) ? fb._visibleCount : fbTotal;
+        if (fb._isFiltered) anyFiltered = true;
+      });
+      const tcSpan = document.getElementById(`tc-${libId}`);
+      if (tcSpan) tcSpan.textContent = anyFiltered ? `(${visible}\u202f/\u202f${total})` : `(${total})`;
+    }
+
+    document.querySelectorAll(".filter-box").forEach(box=>{
+      const input      = box.querySelector("input[type='text']");
+      const selects    = box.querySelectorAll("select");
+      const resSelect  = box.querySelector("select");           // résolution affichée (SD/720p…)
+      const resModeSelect = box.querySelector(".res-filter-select"); // filtre remote vs local
+
+      // Table may be inside a .section-scroll sibling
+      let table = null;
+      let sib = box.nextElementSibling;
+      while (sib) {
+        if (sib.tagName === 'TABLE') { table = sib; break; }
+        const inner = sib.querySelector('table');
+        if (inner) { table = inner; break; }
+        sib = sib.nextElementSibling;
+      }
+      if (!table) return;
+
+      // Appliquer le filtre résolution remote vs local immédiatement si présent
+      if (resModeSelect) applyResFilter(table, resModeSelect.value);
+
+      const run = () => {
+        const q   = (input     ? input.value     : "").toLowerCase();
+        const res = (resSelect  ? resSelect.value : "").toLowerCase();
+
+        table.querySelectorAll("tbody tr").forEach(row => {
+          if (row.classList.contains('episode-details')) return;
+          const txt  = row.textContent.toLowerCase();
+          const rText = row.querySelector(".res-cell")?.textContent.toLowerCase() || "";
+          const passText = txt.includes(q);
+          const passResSelect = res ? rText.includes(res) : true;
+          if (!row.classList.contains('compare-row')) {
+            row.style.display = (passText && passResSelect) ? "" : "none";
+          } else {
+            // Les compare-rows sont gérées par applyResFilter pour le mode remote vs local
+            // On applique quand même le filtre texte + résolution affichée
+            if (!passText || !passResSelect) row.style.display = "none";
+            // (applyResFilter peut remettre display à "" — on ne touche pas ici)
+          }
+        });
+
+        if (resModeSelect) applyResFilter(table, resModeSelect.value);
+
+        // Mettre à jour les compteurs filtrés
+        const libId = box.dataset.libId;
+        if (libId) {
+          const visible = [...table.querySelectorAll('tbody tr:not(.episode-details)')].filter(r => r.style.display !== 'none').length;
+          const totalRows = parseInt(box.dataset.total || '0');
+          const scope = box.dataset.scope;
+          const isActive = q !== '' || (res && res !== '') || (resModeSelect && resModeSelect.value !== 'none');
+          const fi = document.getElementById(`fi-${scope}-${libId}`);
+          if (fi) fi.textContent = isActive ? `${visible} résultat${visible !== 1 ? 's' : ''} sur ${totalRows}` : '';
+          box._visibleCount = visible;
+          box._isFiltered = isActive;
+          updateTabCount(libId);
+        }
+      };
+
+      if (input) input.addEventListener("input", run);
+      selects.forEach(s => s.addEventListener("change", run));
+    });
+
+    document.querySelectorAll('.sortable').forEach(header=>{
+      header.addEventListener('click', ()=>{
+        const table = header.closest('table');
+        const tbody = table.querySelector('tbody');
+        const idx = Array.from(header.parentNode.children).indexOf(header);
+        const asc = !header.classList.contains('asc');
+        table.querySelectorAll('th').forEach(th=>th.classList.remove('asc','desc'));
+        header.classList.add(asc ? 'asc' : 'desc');
+        Array.from(tbody.querySelectorAll('tr:not(.episode-details)'))
+          .sort((a,b)=>{
+            const A = (a.children[idx]?.innerText || '').trim();
+            const B = (b.children[idx]?.innerText || '').trim();
+            return A.localeCompare(B, undefined, {numeric:true}) * (asc?1:-1);
+          })
+          .forEach(row=>{
+            const onclick = row.getAttribute('onclick') || '';
+            const m = onclick.match(/'(.*?)'/);
+            tbody.appendChild(row);
+            if(m && m[1]){ const detailRow = document.getElementById(m[1]); if(detailRow) tbody.appendChild(detailRow); }
+          });
+      });
+    });
+  });
+
+  function _fmtDuration(seconds) {
+    if (seconds == null) return "";
+    const s = Math.round(seconds);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60), r = s % 60;
+    return r > 0 ? `${m}m${r}s` : `${m}m`;
+  }
+
+  // Formater la date ISO en locale
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('last-compared-ts');
+    if (el && el.dataset.iso) {
+      try {
+        const d = new Date(el.dataset.iso);
+        if (!isNaN(d)) {
+          el.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        } else {
+          el.textContent = el.dataset.iso;
+        }
+      } catch {
+        el.textContent = el.dataset.iso;
+      }
+    }
+  });
+
+  let _ftpPollInterval = 5000;
+  async function _pollFtpStatus() {
+    try {
+      const res = await fetch("/ftp/status");
+      const data = await res.json();
+      const progressBox = document.getElementById("ftp-progress");
+      const text = document.getElementById("ftp-text");
+      const bar = document.getElementById("ftp-bar");
+      const barWrap = document.getElementById("ftp-bar-wrap");
+      const timerEl = document.getElementById("ftp-timer");
+      const cancelBtn = document.getElementById("ftp-cancel-btn");
+      const activePhases = ["scanning", "comparing", "comparing_dashboard", "starting", "loading_sections"];
+      const isActive = data.running || activePhases.includes(data.phase);
+
+      if (!isActive) {
+        if (progressBox) progressBox.style.display = "none";
+        if (barWrap) barWrap.style.display = "none";
+        if (bar) bar.style.width = "0%";
+        if (cancelBtn) cancelBtn.style.display = "none";
+        _ftpPollInterval = 5000;
+      } else {
+        if (progressBox) progressBox.style.display = "block";
+        if (barWrap) barWrap.style.display = "block";
+        _ftpPollInterval = 1000;
+        if (cancelBtn) cancelBtn.style.display = "inline-block";
+
+        const elapsed = data.started_at ? Math.round(Date.now() / 1000 - data.started_at) : null;
+        if (timerEl && elapsed != null) timerEl.innerText = _fmtDuration(elapsed);
+
+        let percent = 0, label = "";
+        if (data.phase === "loading_sections") {
+          percent = data.comparison_percent ?? 0;
+          label = `Chargement Plex: ${percent}% (${data.comparison_done || 0} / ${data.comparison_total || 0} bibliothèques)`;
+          if (data.message && data.message !== "Chargement des bibliothèques Plex...") label += ` — ${data.message}`;
+        } else if (data.phase === "scanning") {
+          percent = data.estimated_percent ?? 0;
+          const found = data.files_found || 0;
+          const total = data.estimated_total_files;
+          label = `FTP scan: ${percent}%`;
+          if (total) label += ` (${found} / ~${total})`; else label += ` - ${found} fichiers`;
+          if (data.current_root) label += ` | ${data.current_root}`;
+        } else if (data.phase === "comparing") {
+          percent = data.comparison_percent ?? 0;
+          label = `Analyse FTP: ${percent}%`;
+        } else if (data.phase === "comparing_dashboard") {
+          percent = data.comparison_percent ?? 0;
+          label = `Comparaison: ${percent}% (${data.comparison_done || 0} / ${data.comparison_total || 0})`;
+        } else if (data.phase === "starting") {
+          percent = 0; label = data.message || "Initialisation...";
+        } else {
+          percent = data.estimated_percent ?? 0; label = `FTP: ${percent}%`;
+        }
+        if (text) text.innerText = label;
+        if (bar) bar.style.width = percent + "%";
+      }
+    } catch (e) { console.error(e); }
+    finally { setTimeout(_pollFtpStatus, _ftpPollInterval); }
+  }
+
+  async function cancelScan() {
+    const btn = document.getElementById("ftp-cancel-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "Annulation..."; }
+    try {
+      await fetch("/ftp/cancel_scan", { method: "POST" });
+    } catch(e) { console.error(e); }
+    if (btn) { btn.disabled = false; btn.textContent = "Annuler"; }
+  }
+
+  _pollFtpStatus();
+</script>
+<script>
+function resetFtpButton(button) {
+  button.dataset.jobId = "";
+  button.dataset.status = "idle";
+  button.textContent = {{ t("dashboard.btn_ftp_download") | tojson }};
+  button.disabled = false;
+  button.classList.remove("is-queued", "is-downloading");
+}
+function markDoneFtpButton(button) {
+  button.dataset.status = "done";
+  button.textContent = "Téléchargé";
+  button.disabled = true;
+  button.classList.remove("is-queued", "is-downloading");
+}
+async function refreshFtpButtonStatus(button) {
+  const jobId = button.dataset.jobId;
+  const mediaKey = button.dataset.mediaKey;
+  let url = null;
+  if (jobId) url = `/ftp/download_status?job_id=${encodeURIComponent(jobId)}`;
+  else if (mediaKey) url = `/ftp/download_status?media_key=${encodeURIComponent(mediaKey)}`;
+  else return;
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!data.success) return;
+    const status = data.status || "idle";
+    button.dataset.status = status;
+    if (data.job_id) button.dataset.jobId = data.job_id;
+    if (status === "idle" || status === "cancelled" || status === "error") { resetFtpButton(button); return; }
+    if (status === "queued") {
+      const pos = data.queue_position;
+      if (pos) { button.textContent = `Retirer (#${pos})`; button.disabled = false; }
+      else { button.textContent = "Préparation..."; button.disabled = true; }
+      button.classList.add("is-queued"); button.classList.remove("is-downloading"); return;
+    }
+    if (status === "downloading") {
+      button.textContent = `Téléchargement... (${data.progress || 0}%)`;
+      button.disabled = true; button.classList.add("is-downloading"); button.classList.remove("is-queued"); return;
+    }
+    if (status === "done") { markDoneFtpButton(button); return; }
+    resetFtpButton(button);
+  } catch (err) { console.error(err); }
+}
+async function queueFtpDownload(button) {
+  button.disabled = true; button.textContent = "Ajout à la file...";
+  try {
+    const response = await fetch("/ftp/queue_download", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ media_key: button.dataset.mediaKey || "", remote_path: button.dataset.remotePath || "", filename: button.dataset.filename || "", media_type: button.dataset.mediaType || "movie", ftp_id: button.dataset.ftpId || "" })
+    });
+    const data = await response.json();
+    if (!data.success) { resetFtpButton(button); return; }
+    button.dataset.jobId = data.job_id || "";
+    button.dataset.status = "queued";
+    button.textContent = "Préparation..."; button.disabled = true;
+    button.classList.add("is-queued"); button.classList.remove("is-downloading");
+    await refreshFtpButtonStatus(button);
+  } catch (err) { console.error(err); resetFtpButton(button); }
+}
+async function cancelFtpDownload(button) {
+  const jobId = button.dataset.jobId;
+  if (!jobId) return;
+  button.disabled = true; button.textContent = "Retrait...";
+  try {
+    const response = await fetch("/ftp/cancel_download", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_id: jobId })
+    });
+    const data = await response.json();
+    if (!data.success) { await refreshFtpButtonStatus(button); return; }
+    if (data.status === "cancelled") { resetFtpButton(button); return; }
+    await refreshFtpButtonStatus(button);
+  } catch (err) { console.error(err); await refreshFtpButtonStatus(button); }
+}
+async function handleFtpDownloadClick(button) {
+  const status = button.dataset.status || "idle";
+  if (status === "queued") { await cancelFtpDownload(button); return; }
+  if (status === "downloading" || status === "done") return;
+  await queueFtpDownload(button);
+}
+document.addEventListener("DOMContentLoaded", function () {
+  setInterval(() => {
+    document.querySelectorAll(".btn-ftp-download").forEach((button) => {
+      const status = button.dataset.status || "idle";
+      if (status === "queued" || status === "downloading") refreshFtpButtonStatus(button);
+    });
+  }, 2000);
+});
+function moveUp(jobId) {
+  fetch('/ftp/move_up', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_id: jobId }) }).then(() => refreshQueue());
+}
+function moveDown(jobId) {
+  fetch('/ftp/move_down', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_id: jobId }) }).then(() => refreshQueue());
+}
+async function ignoreItem(title, type, btn) {
+  if (!confirm(`Ignorer "${title}" dans les comparatifs futurs ?`)) return;
+  btn.disabled = true; btn.textContent = "...";
+  try {
+    const resp = await fetch('/ftp/ignore/add', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, type, reason: 'masqué depuis dashboard' })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const row = btn.closest('tr');
+      if (row) { row.style.opacity = '0.4'; row.style.pointerEvents = 'none'; }
+      btn.textContent = "Ignoré";
+    } else {
+      btn.disabled = false; btn.textContent = "Ignorer";
+    }
+  } catch(e) { console.error(e); btn.disabled = false; btn.textContent = "Ignorer"; }
+}
+</script>
+<script>
+// Nettoyer ?refresh=true de l'URL après chargement pour éviter un re-refresh sur F5
+(function() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.has('refresh')) {
+    url.searchParams.delete('refresh');
+    history.replaceState(null, '', url.pathname + (url.search || ''));
+  }
+})();
+</script>
+{% endblock %}
+
+{% block content %}
+{% if loading %}
+<style>
+.loading-page { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; gap:1.5rem; text-align:center; }
+.loading-title { font-size:1.4rem; font-weight:600; }
+.loading-sub   { color:var(--muted); font-size:.9rem; }
+.loading-bar-wrap { width:min(480px,80vw); background:var(--bg-elev-2,#2a2a2a); border-radius:8px; height:10px; overflow:hidden; }
+.loading-bar   { height:100%; background:var(--primary,#e5a00d); border-radius:8px; transition:width .4s ease; }
+.loading-pct   { font-size:.85rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+.spinner-icon  { font-size:2.5rem; animation:spin 1.2s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+<div class="loading-page" id="loading-page">
+  <div class="spinner-icon">⏳</div>
+  <div class="loading-title">{{ t("dashboard.loading_title") }}</div>
+  <div class="loading-bar-wrap">
+    <div class="loading-bar" id="loading-bar" style="width:{{ loading_percent|default(0) }}%"></div>
+  </div>
+  <div class="loading-pct" id="loading-pct">{{ loading_percent|default(0) }}%</div>
+  <div class="loading-sub" id="loading-msg">{{ loading_message|default(t('dashboard.loading_start')) }}</div>
+  <div class="loading-sub" style="font-size:.8rem; color:var(--muted);">{{ t("dashboard.loading_auto") }}</div>
+</div>
+<script>
+(function(){
+  const key = {{ cache_key|tojson }};
+  const bar = document.getElementById('loading-bar');
+  const pct = document.getElementById('loading-pct');
+  const msg = document.getElementById('loading-msg');
+  let lastPct = {{ loading_percent|default(0) }};
+
+  async function poll() {
+    try {
+      const res = await fetch('/dashboard/status?key=' + encodeURIComponent(key));
+      const d = await res.json();
+      if (d.status === 'done') { location.reload(); return; }
+      if (d.status === 'dead') {
+        // Worker tué par Gunicorn (max-requests) pendant le calcul → relancer
+        msg.textContent = '♻️ Calcul interrompu, redémarrage...';
+        setTimeout(() => location.reload(), 1500);
+        return;
+      }
+      if (d.status === 'error') {
+        msg.textContent = '❌ ' + (d.message || 'Erreur inconnue');
+        pct.textContent = '';
+        return; // stop polling on error
+      }
+      if (d.percent != null && d.percent > lastPct) {
+        lastPct = d.percent;
+        bar.style.width = d.percent + '%';
+        pct.textContent = d.percent + '%';
+      }
+      if (d.message) msg.textContent = d.message;
+    } catch(e) { /* réseau temporairement indispo, on réessaie */ }
+    setTimeout(poll, 4000);
+  }
+  setTimeout(poll, 2000);
+})();
+</script>
+{% else %}
+  <header>
+    <h1>{{ t("app.title") }}</h1>
+    <div class="button-group">
+      <a href="{{ url_for('dashboard.dashboard', refresh='true') }}" class="button-secondary">{{ t("header.refresh") }}</a>
+    </div>
+  </header>
+
+  <div id="ftp-progress" style="display:none; padding:6px 10px; background:#111; color:#fff; margin-bottom:8px; border-radius:4px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div id="ftp-text" style="flex:1; font-size:.85rem;"></div>
+      <span id="ftp-timer" style="font-size:0.8rem; color:#aaa; font-variant-numeric:tabular-nums;"></span>
+      <button id="ftp-cancel-btn" onclick="cancelScan()" style="display:none; padding:2px 8px; background:#c0392b; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem;">{{ t("dashboard.ftp_cancel") }}</button>
+    </div>
+    <div id="ftp-bar-wrap" style="background:#333; height:6px; margin-top:4px; border-radius:3px; display:none;">
+      <div id="ftp-bar" style="height:6px; width:0%; background:#f39c12; border-radius:3px; transition:width .3s;"></div>
+    </div>
+  </div>
+  {% if last_update %}
+  <p id="last-compared" class="muted" style="font-size:.8rem; margin:0 0 8px;">{{ t("dashboard.last_compared") }} <span id="last-compared-ts" data-iso="{{ last_update }}"></span></p>
+  {% else %}
+  <p id="last-compared" class="muted" style="font-size:.8rem; margin:0 0 8px; display:none;"></p>
+  {% endif %}
+
+  <div class="tabs">
+    {% for lib in libraries %}
+      <div id="{{ lib.title|b64encode }}-tab" class="tab {% if loop.first %}active{% endif %}" onclick="showTab('{{ lib.title|b64encode }}')">{{ lib.title }}<span class="tab-count" id="tc-{{ lib.title|b64encode }}">({{ lib.missing_count + lib.comparison_count }})</span></div>
+    {% endfor %}
+  </div>
+
+  <div id="tab-contents">
+    {% for lib in libraries %}
+      <div id="{{ lib.title|b64encode }}" class="tab-content {% if loop.first %}active{% endif %}">
+        <h2>{{ t("dashboard.missing_title", lib=lib.title, count=lib.missing_count) }}</h2>
+        <p class="filter-indicator" id="fi-miss-{{ lib.title|b64encode }}"></p>
+
+        <div class="filter-box" data-lib-id="{{ lib.title|b64encode }}" data-scope="miss" data-total="{{ lib.missing_count }}">
+          <input type="text" placeholder="{{ t('dashboard.filter_all') }}">
+          {% if lib.type != 'artist' %}
+            <select>
+              <option value="">{{ t("dashboard.res_all") }}</option>
+              <option value="sd">{{ t("dashboard.res_sd") }}</option>
+              <option value="720">720p</option>
+              <option value="1080">1080p</option>
+              <option value="4k">4K</option>
+            </select>
+          {% endif %}
+        </div>
+
+        <div class="section-scroll">
+        <table>
+          <thead>
+            {% if lib.type == 'artist' %}
+              <tr><th class="sortable">{{ t("dashboard.th_artist") }}</th><th class="sortable">{{ t("dashboard.th_albums") }}</th></tr>
+            {% else %}
+              <tr>
+                <th class="sortable">{{ t("dashboard.th_title") }}</th>
+                <th class="sortable">{{ t("dashboard.th_year") }}</th>
+                <th class="sortable">{{ t("dashboard.th_resolution") }}</th>
+                <th class="sortable">{{ t("dashboard.th_codec") }}</th>
+                <th class="sortable">{{ t("dashboard.th_bitrate") }}</th>
+                <th class="confidence-col-header">{{ t("dashboard.th_confidence") }}</th>
+                <th class="action-col-header">{{ t("dashboard.th_actions") }}</th>
+              </tr>
+            {% endif %}
+          </thead>
+          <tbody>
+            {% for item in lib.missing %}
+              {% if lib.type == 'artist' or item.type == 'artist' %}
+                <tr onclick="toggleEpisodes('missing-albums-{{ lib.title|b64encode }}-{{ loop.index }}', event)">
+                  <td>{{ item.title | underscore_to_dash }}</td>
+                  <td><span class="muted">{{ (item.albums or [])|length }} album(s)</span></td>
+                </tr>
+                <tr id="missing-albums-{{ lib.title|b64encode }}-{{ loop.index }}" class="episode-details" style="display:none;">
+                  <td colspan="2">
+                    <table class="episode-table">
+                      <thead><tr><th>Album</th><th>Année</th><th>Codec</th><th>Bitrate</th></tr></thead>
+                      <tbody>
+                        {% for album in item.albums or [] %}
+                          <tr>
+                            <td>{{ album.title }}</td><td>{{ album.year }}</td>
+                            <td>{{ getCodecBadge(album.codec)|safe }}</td>
+                            <td>{{ getBitrateBadge(album.bitrate)|safe }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td>
+                    {{ item.title }}
+                    {% if item.episode_count is defined %}<br><span class="muted">{{ item.episode_count }} épisode(s)</span>{% endif %}
+                  </td>
+                  <td>{{ item.year }}</td>
+                  <td class="res-cell">{{ getResolutionBadge(item.res)|safe }}</td>
+                  <td>{{ getCodecBadge(item.codec)|safe }}</td>
+                  <td>{{ getBitrateBadge(item.bitrate)|safe }}</td>
+                  {% set ftp_item = item.get('ftp_item') %}
+                  {% set confidence = item.get('ftp_confidence') %}
+                  {% set ftp_path = ftp_item.get('path') if ftp_item else None %}
+                  {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('remote_path') %}{% endif %}
+                  {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('full_path') %}{% endif %}
+                  <td class="confidence-cell">
+                    {% if ftp_item and ftp_path %}
+                      {% if confidence is not none %}
+                        <span class="confidence-badge {% if confidence >= 80 %}confidence-high{% elif confidence >= 60 %}confidence-medium{% else %}confidence-low{% endif %}"
+                              title="{{ t('dashboard.confidence_title') }}">{{ confidence }}%</span>
+                      {% else %}<span class="ftp-badge">FTP</span>{% endif %}
+                    {% endif %}
+                  </td>
+                  <td class="action-cell">
+                    <div class="action-cell-inner">
+                      <div class="ftp-action-group">
+                        {% if ftp_item and ftp_path %}
+                          <button type="button" class="queue-move-btn" onclick="moveUp('{{ job_id }}')" title="Monter dans la file">▲</button>
+                          <button class="btn btn-sm btn-ftp-download"
+                            data-media-key="{{ item.media_key or ftp_path }}"
+                            data-remote-path="{{ ftp_path }}"
+                            data-filename="{{ ftp_item.get('name') or item.filename or item.title }}"
+                            data-media-type="{{ item.type or lib.type or 'movie' }}"
+                            data-ftp-id="{{ ftp_item.get('ftp_id', '') }}"
+                            data-job-id="" data-status="idle"
+                            title="{{ ftp_path }}"
+                            onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }}</button>
+                          <button type="button" class="queue-move-btn" onclick="moveDown('{{ job_id }}')" title="Descendre dans la file">▼</button>
+                        {% endif %}
+                      </div>
+                      <button class="btn btn-sm btn-ignore"
+                        data-title="{{ item.title | e }}"
+                        data-type="{{ item.type or lib.type }}">{{ t("dashboard.btn_ignore") }}</button>
+                    </div>
+                  </td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>{# /section-scroll missing #}
+
+        <h2>{{ t("dashboard.compare_title", lib=lib.title, count=lib.comparison_count) }}</h2>
+        <p class="filter-indicator" id="fi-comp-{{ lib.title|b64encode }}"></p>
+
+        <div class="filter-box" data-lib-id="{{ lib.title|b64encode }}" data-scope="comp" data-total="{{ lib.comparison_count }}">
+          <input type="text" placeholder="{{ t('dashboard.filter_title') }}">
+          <select>
+            <option value="">{{ t("dashboard.res_all") }}</option>
+            <option value="sd">{{ t("dashboard.res_sd") }}</option>
+            <option value="720">720p</option>
+            <option value="1080">1080p</option>
+            <option value="4k">4K</option>
+          </select>
+          <select class="res-filter-select" style="margin-left:.5rem;">
+            <option value="none"           {% if resolution_filter_mode == 'none'           %}selected{% endif %}>{{ t("dashboard.res_filter_all") }}</option>
+            <option value="equal_or_higher"{% if resolution_filter_mode == 'equal_or_higher' %}selected{% endif %}>{{ t("dashboard.res_filter_gte") }}</option>
+            <option value="higher_only"    {% if resolution_filter_mode == 'higher_only'     %}selected{% endif %}>{{ t("dashboard.res_filter_gt") }}</option>
+          </select>
+        </div>
+
+        <div class="section-scroll">
+        <table>
+          <thead>
+            {% if lib.type == 'artist' %}
+              <tr><th class="sortable">{{ t("dashboard.th_artist") }}</th><th class="sortable">{{ t("dashboard.th_missing_albums") }}</th></tr>
+            {% else %}
+              <tr>
+                <th class="sortable">{{ t("dashboard.th_title") }}</th>
+                <th class="sortable">{{ t("dashboard.th_year") }}</th>
+                <th class="sortable">{{ t("dashboard.th_my_res") }}</th>
+                <th class="sortable">{{ t("dashboard.th_his_res") }}</th>
+                <th class="sortable">{{ t("dashboard.th_my_codec") }}</th>
+                <th class="sortable">{{ t("dashboard.th_his_codec") }}</th>
+                <th class="sortable">{{ t("dashboard.th_my_bitrate") }}</th>
+                <th class="sortable">{{ t("dashboard.th_his_bitrate") }}</th>
+                <th class="confidence-col-header">{{ t("dashboard.th_confidence") }}</th>
+                <th class="action-col-header">{{ t("dashboard.th_actions") }}</th>
+              </tr>
+            {% endif %}
+          </thead>
+          <tbody>
+            {% for item in lib.comparison %}
+              {% if lib.type == 'artist' or item.type == 'artist' %}
+                <tr onclick="toggleEpisodes('albums-{{ lib.title|b64encode }}-{{ loop.index }}', event)">
+                  <td>{{ item.title | underscore_to_dash }}</td>
+                  <td><span class="muted">{{ (item.missing_albums or [])|length }} album(s) manquant(s)</span></td>
+                </tr>
+                <tr id="albums-{{ lib.title|b64encode }}-{{ loop.index }}" class="episode-details" style="display:none;">
+                  <td colspan="2">
+                    <table class="episode-table">
+                      <thead><tr><th>Album</th><th>Année</th><th>Codec</th><th>Bitrate</th></tr></thead>
+                      <tbody>
+                        {% for album in item.missing_albums or [] %}
+                          <tr>
+                            <td>{{ album.title }}</td><td>{{ album.year }}</td>
+                            <td>{{ getCodecBadge(album.codec)|safe }}</td>
+                            <td>{{ getBitrateBadge(album.bitrate)|safe }}</td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              {% else %}
+                <tr {% if item.missing_episodes %}onclick="toggleEpisodes('eps-{{ lib.title|b64encode }}-{{ loop.index }}', event)"{% endif %}
+                    data-res-remote="{{ item.res_rank_remote | default(0) }}"
+                    data-res-local="{{ item.res_rank_local | default(0) }}"
+                    class="compare-row">
+                  <td>
+                    {{ item.title }}
+                    {% if item.my_count is defined and item.his_count is defined %}<br><span class="muted">{{ item.my_count }} vs {{ item.his_count }}</span>{% endif %}
+                  </td>
+                  <td>{{ item.year }}</td>
+                  <td class="res-cell">{{ getResolutionBadge(item.my_res)|safe }}</td>
+                  <td class="res-cell">{{ getResolutionBadge(item.his_res)|safe }}</td>
+                  <td>{{ getCodecBadge(item.my_codec)|safe }}</td>
+                  <td>{{ getCodecBadge(item.his_codec)|safe }}</td>
+                  <td>{{ getBitrateBadge(item.my_bitrate)|safe }}</td>
+                  <td>{{ getBitrateBadge(item.his_bitrate)|safe }}</td>
+                  {% set ftp_item = item.get('ftp_item') %}
+                  {% set confidence = item.get('ftp_confidence') %}
+                  {% set ftp_path = ftp_item.get('path') if ftp_item else None %}
+                  {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('remote_path') %}{% endif %}
+                  {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('full_path') %}{% endif %}
+                  <td class="confidence-cell">
+                    {% if ftp_item and ftp_path %}
+                      {% if confidence is not none %}
+                        <span class="confidence-badge {% if confidence >= 80 %}confidence-high{% elif confidence >= 60 %}confidence-medium{% else %}confidence-low{% endif %}"
+                              title="{{ t('dashboard.confidence_title') }}">{{ confidence }}%</span>
+                      {% else %}<span class="ftp-badge">FTP</span>{% endif %}
+                    {% endif %}
+                  </td>
+                  <td class="action-cell">
+                    <div class="action-cell-inner">
+                      <div class="ftp-action-group">
+                        {% if ftp_item and ftp_path %}
+                          <button type="button" class="queue-move-btn" onclick="moveUp('{{ job_id }}')" title="Monter dans la file">▲</button>
+                          <button class="btn btn-sm btn-ftp-download"
+                            data-media-key="{{ item.media_key or ftp_path }}"
+                            data-remote-path="{{ ftp_path }}"
+                            data-filename="{{ ftp_item.get('name') or item.filename or item.title }}"
+                            data-media-type="{{ item.type or lib.type or 'movie' }}"
+                            data-ftp-id="{{ ftp_item.get('ftp_id', '') }}"
+                            data-job-id="" data-status="idle"
+                            title="{{ ftp_path }}"
+                            onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }}</button>
+                          <button type="button" class="queue-move-btn" onclick="moveDown('{{ job_id }}')" title="Descendre dans la file">▼</button>
+                        {% endif %}
+                      </div>
+                      <button class="btn btn-sm btn-ignore"
+                        data-title="{{ item.title | e }}"
+                        data-type="{{ item.type or lib.type }}">{{ t("dashboard.btn_ignore") }}</button>
+                    </div>
+                  </td>
+                </tr>
+
+                {% if item.missing_episodes %}
+                  <tr id="eps-{{ lib.title|b64encode }}-{{ loop.index }}" class="episode-details" style="display:none;">
+                    <td colspan="10">
+                      <table class="episode-table">
+                        <thead>
+                          <tr>
+                            <th>{{ t("dashboard.th_season") }}</th><th>{{ t("dashboard.th_episode") }}</th><th>{{ t("dashboard.th_title") }}</th>
+                            <th>{{ t("dashboard.th_resolution") }}</th><th>{{ t("dashboard.th_codec") }}</th><th>{{ t("dashboard.th_bitrate") }}</th>
+                            <th class="confidence-col-header">{{ t("dashboard.confidence_ep_title") }}</th><th class="action-col-header">{{ t("dashboard.th_actions") }}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for ep in item.missing_episodes %}
+                            <tr>
+                              <td>{{ ep.season }}</td><td>{{ ep.episode }}</td><td>{{ ep.title }}</td>
+                              <td>{{ getResolutionBadge(ep.res)|safe }}</td>
+                              <td>{{ getCodecBadge(ep.codec)|safe }}</td>
+                              <td>{{ getBitrateBadge(ep.bitrate)|safe }}</td>
+                              {% set ftp_item = ep.get('ftp_item') %}
+                              {% set confidence = ep.get('ftp_confidence') %}
+                              {% set ftp_path = ftp_item.get('path') if ftp_item else None %}
+                              {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('remote_path') %}{% endif %}
+                              {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('full_path') %}{% endif %}
+                              <td class="confidence-cell">
+                                {% if ftp_item and ftp_path %}
+                                  {% if confidence is not none %}
+                                    <span class="confidence-badge {% if confidence >= 80 %}confidence-high{% elif confidence >= 60 %}confidence-medium{% else %}confidence-low{% endif %}"
+                                          title="{{ t('dashboard.confidence_ep_title') }}">{{ confidence }}%</span>
+                                  {% else %}<span class="ftp-badge">FTP</span>{% endif %}
+                                {% endif %}
+                              </td>
+                              <td class="action-cell">
+                                {% if ftp_item and ftp_path %}
+                                  <div class="ftp-action-group">
+                                    <div class="queue-move-buttons">
+                                      <button type="button" class="queue-move-btn" onclick="moveUp('{{ job_id }}')" title="Monter dans la file">▲</button>
+                                    </div>
+                                    <button class="btn btn-sm btn-ftp-download"
+                                      data-media-key="{{ ep.media_key or ftp_path }}"
+                                      data-remote-path="{{ ftp_path }}"
+                                      data-filename="{{ ftp_item.get('name') or ep.filename or ep.title }}"
+                                      data-media-type="{{ ep.type or 'episode' }}"
+                                      data-ftp-id="{{ ftp_item.get('ftp_id', '') }}"
+                                      data-job-id="" data-status="idle"
+                                      title="{{ ftp_path }}"
+                                      onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }}</button>
+                                    <div>
+                                      <button type="button" class="queue-move-btn" onclick="moveDown('{{ job_id }}')" title="Descendre dans la file">▼</button>
+                                    </div>
+                                  </div>
+                                {% endif %}
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>{# /section-scroll compare #}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

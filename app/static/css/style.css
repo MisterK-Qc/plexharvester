@@ -1,0 +1,947 @@
+/* ==========================================================================
+   Plex Compare — Style global unifié (dark theme)
+   ========================================================================== */
+
+/* -- Variables ------------------------------------------------------------ */
+:root{
+  --bg: #141414;
+  --bg-elev-1: #1a1a1a;
+  --bg-elev-2: #1f1f1f;
+  --bg-elev-3: #2a2a2a;
+
+  --txt: #e6e6e6;
+  --txt-muted: #9aa0a6;
+
+  --border: #333;
+  --border-soft: #2a2a2a;
+
+  --primary: #e5a00d;  /* or #FFB300 */
+  --primary-contrast: #141414;
+
+  --accent: #4aa3ff;
+
+  --ok: #00cc66;
+  --warn: #ffaa00;
+  --err: #ff4444;
+
+  --radius: 10px;
+  --radius-pill: 999px;
+  --shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+
+/* -- Reset & base -------------------------------------------------------- */
+*{ box-sizing: border-box; }
+html, body{ height: 100%; }
+html{ scroll-behavior: smooth; }
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--txt);
+  font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+}
+
+/* -- Main navigation tab bar --------------------------------------------- */
+.main-nav{
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  background: var(--bg-elev-1);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.main-nav-tab{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  color: var(--txt-muted);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.main-nav-tab:hover{ color: var(--txt); text-decoration: none; }
+.main-nav-tab.active{
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+.main-nav-spacer{ flex: 1; }
+.main-nav-tab.logout{ color: var(--err); }
+.main-nav-tab.logout:hover{ color: #ff6666; }
+.mkv-badge{
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  min-width: 28px;
+  text-align: center;
+}
+
+/* -- Layouts ------------------------------------------------------------- */
+header{
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  display:flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: sticky;
+  top: var(--nav-h, 43px);
+  z-index: 90;
+  background: var(--bg);
+  box-shadow: 0 1px 0 var(--border);
+}
+header h1{ margin:0; font-weight: 650; }
+
+/* Scrollable sections (dashboard) */
+.section-scroll{
+  max-height: 72vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+.section-scroll table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-elev-1);
+}
+
+main{ max-width: 1100px; margin: 0 auto; padding: 12px 16px 28px; }
+
+/* Limiters for different pages (optional) */
+.page-dashboard main,
+.page-my-dashboard main,
+.page-mkvtoolnix main{ max-width: 1200px; }
+.page-config main{ max-width: none; padding-left: 1.5rem; padding-right: 1.5rem; }
+.page-config header{ max-width: none; }
+
+/* -- Typography utils ---------------------------------------------------- */
+.muted{ color: var(--txt-muted); }
+small.muted, .muted small{ font-size: .9em; }
+
+/* -- Links --------------------------------------------------------------- */
+a{ color: var(--accent); text-decoration: none; }
+a:hover{ text-decoration: underline; }
+
+/* -- Buttons ------------------------------------------------------------- */
+.button-group{ display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; }
+.button-primary, .button-secondary{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; padding:10px 14px; border-radius: var(--radius);
+  border:1px solid var(--border); vertical-align: middle;
+  background: var(--bg-elev-2); color: var(--txt); text-decoration:none;
+  cursor:pointer; transition: transform .05s ease, background .2s ease, border-color .2s ease;
+  user-select:none;
+}
+.button-primary{
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: #b07d0a;
+}
+.button-primary:hover{ filter: brightness(1.05); text-decoration:none; }
+.button-secondary:hover{ background: var(--bg-elev-3); text-decoration:none; }
+.button-danger{
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; padding:10px 14px; border-radius: var(--radius);
+  border:1px solid #7a2020; vertical-align: middle;
+  background: #5c1a1a; color: #f5c2c2; text-decoration:none; cursor:pointer;
+  font-size: inherit;
+}
+.button-danger:hover{ background: #7a2020; text-decoration:none; }
+button:disabled, .button-primary:disabled, .button-secondary:disabled, .button-danger:disabled{
+  opacity:.6; cursor:not-allowed;
+}
+
+/* -- Forms --------------------------------------------------------------- */
+.form-vertical{ display:flex; flex-direction:column; gap:10px; max-width: 560px; }
+label{ font-weight:600; }
+input[type="text"], input[type="password"], input[type="number"], select, textarea{
+  width: 100%;
+  padding: .6rem .7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #1e1e1e;
+  color: var(--txt);
+  outline: none;
+}
+input:focus, select:focus, textarea:focus{ border-color: #555; }
+.inline{ display:inline-flex; align-items:center; gap:8px; }
+.stack{ display:flex; flex-direction:column; gap:8px; }
+.row-inline{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.spacer{ flex:1 1 auto; }
+
+/* -- Messages ------------------------------------------------------------ */
+.warning-box, .success-box{
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 10px 0 16px;
+}
+.warning-box{
+  background: #3b2a00;
+  border: 1px solid #5d4200;
+}
+.success-box{
+  background: #0d3622;
+  border: 1px solid #145c38;
+}
+
+/* -- Tables -------------------------------------------------------------- */
+table{ width: 100%; border-collapse: collapse; font-family: inherit; }
+thead{ background: var(--bg-elev-2); }
+th, td{
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tbody tr:hover{ background: rgba(255,255,255,.03); }
+th{ text-align: left; font-weight: 650; }
+th.sortable{ cursor: pointer; user-select: none; }
+th.sortable.asc::after{ content:" ▲"; font-size:.8em; color:#aaa; }
+th.sortable.desc::after{ content:" ▼"; font-size:.8em; color:#aaa; }
+.res-cell{ white-space: nowrap; }
+.episode-details{ background: #131313; }
+
+/* -- Tabs --------------------------------------------------------------- */
+.tabs{ display:flex; justify-content:center; margin:16px auto 10px; flex-wrap:wrap; gap:8px; }
+.tab{
+  background: var(--bg-elev-2);
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer; user-select: none;
+  border: 1px solid var(--border);
+}
+.tab.active{ background: var(--primary); color: var(--primary-contrast); border-color: #c68c0b; }
+.tab-content{ display:none; padding: 8px 0 20px; }
+.tab-content.active{ display:block; }
+
+/* -- Filters ------------------------------------------------------------ */
+.filter-box{
+  display:flex;
+  gap:10px;
+  margin: 8px 0;
+  justify-content:flex-end;
+}
+.filter-box input,
+.filter-box select{
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #1e1e1e;
+  color: var(--txt);
+  padding: .5rem .6rem;
+}
+
+/* -- My Dashboard : Stats & Charts ------------------------------------- */
+.stats-text-container{
+  display:flex; flex-direction:column; gap: 1.5rem;
+  margin-bottom: 1.2rem; padding: 1rem;
+  background: var(--bg-elev-1); border-radius: 8px; border: 1px solid var(--border);
+}
+.stats-section{ display:flex; flex-wrap:wrap; gap:1rem; justify-content:space-between; }
+.stats-column{
+  flex:1; min-width: 280px; padding: 1rem;
+  background: var(--bg-elev-2); border-radius: 8px; border: 1px solid var(--border);
+}
+.stats-column h4{
+  margin:0 0 .8rem; padding-bottom:.5rem; border-bottom:1px solid #444; font-weight:650;
+}
+.stats-column h4.collapsible-header{
+  cursor:pointer;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  user-select:none;
+}
+.stats-column h4 .toggle-icon{ font-size:1.15em; font-weight:700; }
+.stats-column ul{ margin:0; padding-left: 1.1rem; }
+.collapsible-content{ display:none; }
+.collapsible-content.open{
+  display:block;
+}
+.charts-container{
+  display:flex; flex-wrap:wrap; gap: 2rem; justify-content:center; margin-top: 1.2rem;
+}
+.chart-wrapper{ flex:1 1 45%; min-width:320px; max-width:600px; padding: 1rem; }
+
+/* -- Badges (Resolution / Codec / Bitrate) ------------------------------ */
+.badge{
+  display:inline-block; padding: 3px 8px; border-radius: var(--radius-pill);
+  font-size: .85em; border: 1px solid var(--border);
+  background: var(--bg-elev-2); color: var(--txt);
+}
+/* Resolution */
+.badge.uhd{ background:#113b2d; border-color:#1b5947; color:#c3f3df; }
+.badge.fullhd{ background:#0f2c52; border-color:#1c4a85; color:#cfe3ff; }
+.badge.hd{ background:#2a1a4a; border-color:#4b2f7f; color:#e9dbff; }
+.badge.sd{ background:#3a3a3a; border-color:#555; color:#eee; }
+/* Codec */
+.badge.codec{ background:#1e1e1e; }
+.badge.badge-h264, .badge.badge-avc{ background:#1e2f3a; color:#bfe3ff; }
+.badge.badge-h265, .badge.badge-hevc{ background:#1d3a2a; color:#c3f3df; }
+.badge.badge-av1{ background:#34331c; color:#f3edc3; }
+.badge.badge-vp9{ background:#3a1e2f; color:#ffd3ec; }
+.badge.badge-mpeg4{ background:#2e2e2e; color:#ddd; }
+.badge.badge-xvid{ background:#292929; color:#ddd; }
+.badge.badge-divx{ background:#262626; color:#ddd; }
+.badge.badge-unknown{ background:#2b2b2b; color:#ccc; }
+/* Bitrate */
+.badge.bitrate{ background:#1e1e1e; }
+.bitrate.bitrate-high{ background:#113b2d; color:#c3f3df; }
+.bitrate.bitrate-med{ background:#2a2a00; color:#f7f3c3; }
+.bitrate.bitrate-low{ background:#3b1a1a; color:#ffd1d1; }
+.bitrate.bitrate-unk{ background:#2b2b2b; color:#ccc; }
+
+/* -- Service logos & pills ---------------------------------------------- */
+.badge-logo{ height: 22px; vertical-align: middle; margin-right: 6px; border-radius: 4px; }
+.service-pill{
+  display:inline-flex; align-items:center; gap:6px;
+  background: var(--bg-elev-2); border:1px solid var(--border);
+  border-radius: var(--radius-pill); padding: 4px 8px; margin: 4px 6px 0 0;
+  text-decoration:none; color:#fff;
+}
+.service-pill:hover{ background: var(--bg-elev-3); }
+.pill{
+  display:inline-flex; align-items:center; gap:6px;
+  border:1px solid var(--border); background: var(--bg-elev-2);
+  padding: 2px 8px; border-radius: var(--radius-pill); margin: 2px 4px 0 0;
+}
+
+/* Logos de services génériques */
+.service-logo{
+  height: 15px;
+  vertical-align: middle;
+  margin-right: 6px;
+  border-radius: 4px;
+}
+
+/* -- Language flags (mkvtoolnix + reuse) -------------------------------- */
+.language-flag { height: 18px; width: 24px; }
+
+/* -- Status colors (reusable) ------------------------------------------- */
+.status{ white-space: nowrap; }
+.status.success{ color: var(--ok); }
+.status.error{ color: var(--err); }
+.status.processing{ color: var(--warn); }
+
+/* -- Progress (global SSE) ---------------------------------------------- */
+#global-progress{
+  display:none; position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+  background: var(--bg-elev-3); border:1px solid var(--border); border-radius: var(--radius);
+  padding:.6rem 1rem; z-index:1000; box-shadow: var(--shadow);
+}
+.progress-container{
+  width: 260px; background: #1b1b1b; border: 1px solid var(--border); border-radius: var(--radius-pill);
+  height: 10px; overflow: hidden;
+}
+.progress-bar{
+  height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #ffcc33);
+  transition: width .25s ease;
+}
+
+/* -- Page-specific light tweaks ---------------------------------------- */
+/* Login */
+.page-login main{ max-width: 420px; }
+/* Select server */
+.checkbox-group{ display:flex; flex-direction:column; gap:8px; }
+.toolbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+/* MKV toolnix */
+.page-mkvtoolnix h2{ margin-top: 1.2rem; }
+/* Episode sub-table */
+.episode-table{ width:100%; border-collapse: collapse; }
+.episode-table th, .episode-table td{ padding:8px 10px; border-bottom:1px solid var(--border); }
+
+/* -- Media queries ------------------------------------------------------- */
+@media (max-width: 700px){
+  header{ flex-direction: column; align-items:flex-start; gap: 6px; }
+  .button-group{ justify-content: flex-start; }
+  .row-inline{ flex-direction: column; align-items: stretch; }
+  .filter-box{ justify-content: flex-start; }
+}
+
+/* === Patches d'alignement/centrage === */
+.centered { text-align: center; }
+
+/* My Dashboard : note & recherche centrées */
+.page-my-dashboard .manual-search-box { text-align: center; margin-top: 1rem; }
+.page-my-dashboard .note-center { text-align: center; }
+
+/* MKVToolNix : centrer le header (titre + astuce) */
+.page-mkvtoolnix header {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+/* === Tables scrollables + header sticky (comportement global) ========= */
+.table-scroll{
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev-1);
+  margin-bottom: 14px;
+}
+.table-scroll table{ margin: 0; }
+
+/* Table "sticky" générale (autres pages) */
+.sticky-table{
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  width: max-content;
+}
+.sticky-table th, .sticky-table td{
+  background-clip: padding-box;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   FIX #1 — Z-INDEX + LAYERS pour éviter que le header cache les icônes/boutons
+   -------------------------------------------------------------------------- */
+
+/* Header sticky: doit être au-dessus du body, mais avec fond opaque */
+.sticky-table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg-elev-2);
+  box-shadow: 0 1px 0 var(--border);
+  background-clip: padding-box;
+}
+
+/* 1re colonne collée à gauche: au-dessus du body, sous le header */
+.sticky-table th:first-child,
+.sticky-table td:first-child{
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--bg-elev-1);
+  background-clip: padding-box;
+}
+
+/* Intersection (cellule en haut à gauche): doit gagner sur tout */
+.sticky-table thead th:first-child{
+  z-index: 40;
+}
+
+/* Assure que les cellules ont un contexte correct */
+.sticky-table tbody td{
+  position: relative;
+  z-index: 1;
+}
+
+/* Icônes/boutons/actions dans les cellules: au-dessus du contenu (et visibles) */
+.sticky-table td .table-actions,
+.sticky-table td .actions,
+.sticky-table td button,
+.sticky-table td a{
+  position: relative;
+  z-index: 10;
+}
+
+/* Optionnel: évite que le header “mange” les clics si chevauchement visuel */
+.sticky-table thead{
+  position: relative;
+  z-index: 35;
+}
+
+/* === My Dashboard : overrides dédiés (simplifiés) ======================= */
+
+/* Filtre titre + service mieux placé */
+.page-my-dashboard .filter-box{
+  justify-content: flex-start;
+}
+.page-my-dashboard .filter-box input{
+  flex: 1 1 auto;
+  max-width: 420px;
+}
+.page-my-dashboard .filter-box select{
+  flex: 0 0 auto;
+}
+
+/* Tables MyDashboard : largeur basée sur le contenu, collée à gauche */
+.page-my-dashboard .sticky-table{
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  table-layout: auto !important;
+
+  display: inline-table;
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+/* Toutes les cellules à gauche par défaut */
+.page-my-dashboard .sticky-table th,
+.page-my-dashboard .sticky-table td{
+  text-align: left !important;
+  white-space: nowrap;
+}
+
+/* Colonne TITRE : texte sur une seule ligne, visible */
+.page-my-dashboard .sticky-table th:first-child,
+.page-my-dashboard .sticky-table td:first-child{
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Colonne ANNÉE : très compacte */
+.page-my-dashboard .sticky-table th:nth-child(2),
+.page-my-dashboard .sticky-table td:nth-child(2){
+  width: 4.5em;
+  max-width: 4.5em;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+
+/* Colonne ÉPISODES (si présente) : wrap OK */
+.page-my-dashboard .sticky-table th:nth-child(3),
+.page-my-dashboard .sticky-table td:nth-child(3){
+  white-space: normal !important;
+}
+
+/* Cellules d'épisodes : on autorise les retours à la ligne */
+.page-my-dashboard .episodes-cell{
+  white-space: normal !important;
+}
+
+/* Conteneur scroll MyDashboard : scroll vertical seulement si nécessaire */
+.page-my-dashboard .table-scroll{
+  max-height: 70vh;
+  overflow: auto;
+}
+
+/* === MyDashboard : uniquement le titre reste sur 1 ligne ================= */
+.page-my-dashboard .sticky-table thead th:nth-child(n+4){
+  white-space: normal !important;
+  line-height: 1.2;
+}
+.page-my-dashboard .sticky-table tbody td:nth-child(n+4){
+  white-space: normal !important;
+}
+
+/* === MyDashboard : compacter les colonnes côté gauche ==================== */
+.page-my-dashboard .sticky-table th:first-child,
+.page-my-dashboard .sticky-table td:first-child{
+  max-width: 400px !important;
+  width: auto !important;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.page-my-dashboard .sticky-table th:nth-child(2),
+.page-my-dashboard .sticky-table td:nth-child(2){
+  width: 60px !important;
+  max-width: 60px !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+.page-my-dashboard .sticky-table th:nth-child(3),
+.page-my-dashboard .sticky-table td:nth-child(3){
+  max-width: 140px !important;
+  white-space: normal !important;
+}
+.page-my-dashboard .sticky-table thead th:nth-child(n+4),
+.page-my-dashboard .sticky-table tbody td:nth-child(n+4){
+  width: 90px !important;
+  max-width: 90px !important;
+  text-align: center !important;
+  white-space: normal !important;
+}
+
+/* === MyDashboard : largeur auto pour le select de service =============== */
+.page-my-dashboard .filter-box .service-filter{
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: fit-content;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* === MyDashboard : Recherche TMDB centrée et largeur fixe =============== */
+.page-my-dashboard .manual-search-box{
+  max-width: 480px;
+  margin: 1rem auto;
+  padding: 1rem;
+  text-align: center;
+}
+.page-my-dashboard .manual-search-box input[type="text"],
+.page-my-dashboard .manual-search-box select,
+.page-my-dashboard .manual-search-box button{
+  width: auto !important;
+  display: inline-block;
+  margin: 0.3rem;
+}
+.page-my-dashboard .manual-search-box input[type="search"]{
+  min-width: 300px;
+}
+.page-my-dashboard .manual-search-box select{
+  min-width: unset;
+}
+.page-my-dashboard .manual-search-box #manual-search-results{
+  margin-top: 1rem;
+  text-align: left;
+}
+
+/* === Forcer le thème sombre sur les champs type=search (avec le X) === */
+.page-my-dashboard input[type="search"] {
+  background: #1e1e1e !important;
+  color: var(--txt) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 0.6rem 2.2rem 0.6rem 0.7rem !important;
+  outline: none !important;
+  -webkit-appearance: none;
+}
+.page-my-dashboard input[type="search"]::-webkit-search-cancel-button {
+  filter: invert(80%);
+  opacity: 0.8;
+  cursor: pointer;
+  height: 16px;
+  width: 16px;
+}
+.page-my-dashboard input[type="search"]::-webkit-search-cancel-button:hover {
+  opacity: 1;
+}
+
+/* === MKVToolNix : panneau espace disque responsive ===================== */
+.storage-panel{
+  margin: 1rem 0 1.25rem;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+
+.storage-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  cursor:pointer;
+  user-select:none;
+  font-weight:650;
+}
+
+.storage-content{
+  display:none;
+  margin-top: 0.9rem;
+}
+
+.storage-content.open{
+  display:block;
+}
+
+.storage-subtitle{
+  margin: 0 0 0.7rem;
+  font-size: 0.98rem;
+}
+
+.storage-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.storage-card{
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.85rem;
+  min-width: 0;
+}
+
+.storage-card-title{
+  font-weight: 650;
+  margin-bottom: 0.35rem;
+  word-break: break-word;
+}
+
+.storage-path{
+  font-size: 0.82rem;
+  margin-bottom: 0.4rem;
+  word-break: break-word;
+}
+
+.logs-console{
+  text-align: left;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  overflow-anchor: none;
+  max-height: 360px;
+  min-height: 220px;
+  background: #111;
+  color: #d8d8d8;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.log-line{
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.log-debug{ color: #8a8f98; }
+.log-info{ color: #d8d8d8; }
+.log-warning{ color: #ffcc66; }
+.log-error{ color: #ff7b72; }
+.log-plain{ color: #d8d8d8; }
+
+/* ==========================================================================
+   Dashboard FTP / score de confiance
+   ========================================================================== */
+
+.page-dashboard .media-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.page-dashboard header {
+  position: static;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+  max-width: none;
+  margin: 0;
+}
+
+.page-dashboard .confidence-col-header {
+  text-align: center;
+  line-height: 1.1;
+  white-space: normal;
+}
+.page-dashboard .action-col-header,
+.page-dashboard .action-cell {
+  text-align: center;
+  width: 1px;
+  white-space: nowrap;
+}
+
+.page-dashboard .confidence-cell,
+.page-dashboard .action-cell {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.page-dashboard .confidence-badge,
+.page-dashboard .ftp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.page-dashboard .confidence-high {
+  background: rgba(46, 204, 113, 0.14);
+  color: #7dffb0;
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.page-dashboard .confidence-medium {
+  background: rgba(255, 184, 77, 0.14);
+  color: #ffcc73;
+  border-color: rgba(255, 184, 77, 0.35);
+}
+
+.page-dashboard .confidence-low {
+  background: rgba(255, 99, 99, 0.14);
+  color: #ff8f8f;
+  border-color: rgba(255, 99, 99, 0.35);
+}
+
+.page-dashboard .ftp-badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ddd;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.page-dashboard .btn-ftp-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: unset;
+  padding: 6px 10px;
+  border: 1px solid #b07d0a;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  margin: 0 auto;
+}
+
+.page-dashboard .btn-ftp-download:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.page-dashboard .btn-ftp-download:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.page-dashboard .btn-ignore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid #555;
+  border-radius: 999px;
+  background: transparent;
+  color: #aaa;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  margin: 0 auto;
+}
+.page-dashboard .btn-ignore:hover {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+.page-dashboard .btn-ignore:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Colonnes compactes pour le tableau principal du dashboard */
+.page-dashboard > .tab-content table,
+.page-dashboard .tab-content > table {
+  table-layout: auto;
+  width: 100%;
+}
+
+.page-dashboard .tab-content > table th,
+.page-dashboard .tab-content > table td {
+  vertical-align: middle;
+}
+
+.page-dashboard .tab-content > table th:nth-child(2),
+.page-dashboard .tab-content > table td:nth-child(2) {
+  width: 72px;   /* Année */
+}
+
+.page-dashboard .tab-content > table th:nth-child(3),
+.page-dashboard .tab-content > table td:nth-child(3) {
+  width: 92px;   /* Résolution */
+}
+
+.page-dashboard .tab-content > table th:nth-child(4),
+.page-dashboard .tab-content > table td:nth-child(4) {
+  width: 95px;   /* Codec */
+}
+
+.page-dashboard .tab-content > table th:nth-child(5),
+.page-dashboard .tab-content > table td:nth-child(5) {
+  width: 110px;  /* Bitrate */
+}
+
+.page-dashboard .tab-content > table th:nth-child(6),
+.page-dashboard .tab-content > table td:nth-child(6) {
+  width: 105px;  /* Score */
+}
+
+.page-dashboard .tab-content > table th:nth-child(7),
+.page-dashboard .tab-content > table td:nth-child(7) {
+  width: 100px;  /* Actions */
+}
+
+.page-dashboard .tab-content > table th:last-child,
+.page-dashboard .tab-content > table td:last-child {
+  text-align: center;
+}
+
+.page-dashboard .tab-content > table .res-cell,
+.page-dashboard .tab-content > table .confidence-cell,
+.page-dashboard .tab-content > table .action-cell {
+  white-space: nowrap;
+}
+
+.action-cell-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.ftp-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.queue-move-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.queue-move-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #2b2b2b 0%, #1f1f1f 100%);
+    color: #f5f5f5;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.queue-move-btn:hover {
+    background: linear-gradient(180deg, #3a3a3a 0%, #262626 100%);
+    border-color: #f5a623;
+    transform: translateY(-1px);
+}
+
+.queue-move-btn:active {
+    transform: translateY(0);
+}
+
+.queue-move-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.queue-move-btn:hover {
+    border-color: #f5a623;
+    box-shadow: 0 0 6px rgba(245, 166, 35, 0.4);
+    transform: translateY(-1px);
+}

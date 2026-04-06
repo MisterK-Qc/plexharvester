@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t("loading.heading") }} — {{ t("app.title") }}{% endblock %}
+
+{% block content %}
+<div style="text-align:center; padding: 4rem 2rem;">
+  <h2>{{ t("loading.heading") }}</h2>
+  <p>{{ t("loading.already_running") }}</p>
+  <p>{{ t("loading.checking_in") }} <span id="countdown">5</span>s…</p>
+  <p><a href="{{ url_for('my_dashboard.my_dashboard') }}">{{ t("loading.reload_now") }}</a></p>
+  <p style="margin-top:1.5rem;">
+    <button id="cancel-analysis-btn" onclick="cancelAnalysis()" style="padding:6px 16px; background:#c0392b; color:#fff; border:none; border-radius:4px; cursor:pointer;">{{ t("loading.cancel_btn") }}</button>
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const _i18n = {
+  cancelling:        {{ t("loading.cancelling")        | tojson }},
+  cancel_btn:        {{ t("loading.cancel_btn")        | tojson }},
+  cancelled_heading: {{ t("loading.cancelled_heading") | tojson }},
+  cancelled_msg:     {{ t("loading.cancelled_msg")     | tojson }},
+};
+(function() {
+  const target = {{ url_for('my_dashboard.my_dashboard') | tojson }};
+  const statusUrl = {{ url_for('my_dashboard.my_dashboard_status') | tojson }};
+  const span = document.getElementById('countdown');
+  let remaining = 5;
+
+  function tick() {
+    remaining--;
+    if (span) span.textContent = remaining;
+    if (remaining <= 0) {
+      check();
+    } else {
+      setTimeout(tick, 1000);
+    }
+  }
+
+  function check() {
+    fetch(statusUrl)
+      .then(r => r.json())
+      .then(d => {
+        if (d.running) {
+          remaining = 5;
+          if (span) span.textContent = remaining;
+          setTimeout(tick, 1000);
+        } else {
+          window.location.href = target;
+        }
+      })
+      .catch(() => {
+        remaining = 5;
+        if (span) span.textContent = remaining;
+        setTimeout(tick, 1000);
+      });
+  }
+
+  setTimeout(tick, 1000);
+})();
+
+async function cancelAnalysis() {
+  const btn = document.getElementById("cancel-analysis-btn");
+  if (btn) { btn.disabled = true; btn.textContent = _i18n.cancelling; }
+  try {
+    const r = await fetch({{ url_for('my_dashboard.my_dashboard_cancel') | tojson }}, { method: "POST" });
+    const d = await r.json();
+    if (d.success) {
+      document.querySelector("h2").textContent = _i18n.cancelled_heading;
+      document.querySelector("p").textContent = _i18n.cancelled_msg;
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = _i18n.cancel_btn; }
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}{{ t("snapshots.title") }}{% endblock %}
+{% block body_class %}page-snapshots{% endblock %}
+
+{% block head %}
+<style>
+  .snapshot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  .snapshot-card {
+    background: var(--bg-elev-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+  }
+  .snapshot-card .snap-label {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .snapshot-card .snap-meta {
+    font-size: .8rem;
+    color: var(--muted);
+  }
+  .snapshot-card .snap-actions {
+    display: flex;
+    gap: .5rem;
+    margin-top: .5rem;
+    flex-wrap: wrap;
+  }
+  .diff-section {
+    margin-top: 1.5rem;
+  }
+  .diff-section h3 {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: .3rem;
+    margin-bottom: .8rem;
+  }
+  .diff-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-elev-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .diff-controls > div { flex: 1; min-width: 200px; }
+  .diff-result-box {
+    margin-top: 1.5rem;
+  }
+  .diff-category {
+    margin-bottom: 1.5rem;
+  }
+  .diff-category h4 {
+    font-size: .95rem;
+    margin-bottom: .5rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .diff-badge {
+    background: var(--bg-elev-2, #333);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: .75rem;
+    font-weight: 600;
+  }
+  .diff-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 60vh;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .diff-list li {
+    padding: .4rem .8rem;
+    border-bottom: 1px solid var(--border);
+    font-size: .85rem;
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+  }
+  .diff-list li:last-child { border-bottom: none; }
+  .diff-list li .diff-year { color: var(--muted); font-size: .78rem; }
+  .diff-list li .diff-eps {
+    color: var(--muted);
+    font-size: .78rem;
+    margin-left: auto;
+  }
+  .diff-eps-detail {
+    font-size: .75rem;
+    color: var(--orange, #ff9800);
+  }
+  .diff-empty { color: var(--muted); font-style: italic; padding: .5rem; }
+  #snap-status {
+    margin-top: .8rem;
+    font-size: .85rem;
+  }
+  .spinner { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<header>
+  <h1>{{ t("snapshots.title") }}</h1>
+  <div class="button-group">
+    <button id="btn-create-snap" class="button-primary">{{ t("snapshots.new") }}</button>
+  </div>
+</header>
+
+<div id="create-form" style="display:none; margin-top:1rem; padding:1rem; background:var(--bg-elev-1); border:1px solid var(--border); border-radius:8px;">
+  <label for="snap-label">{{ t("snapshots.label") }}</label>
+  <div style="display:flex; gap:.5rem; margin-top:.4rem;">
+    <input type="text" id="snap-label" placeholder="{{ t('snapshots.label_placeholder') }}" style="flex:1">
+    <button class="button-primary" id="btn-snap-confirm">{{ t("snapshots.create") }}</button>
+    <button class="button-secondary" id="btn-snap-cancel">{{ t("snapshots.cancel") }}</button>
+  </div>
+  <div id="snap-status"></div>
+</div>
+
+{% if snapshots %}
+<div class="snapshot-grid" id="snapshot-grid">
+  {% for snap in snapshots %}
+  <div class="snapshot-card" data-filename="{{ snap.filename }}">
+    <div class="snap-label">{{ snap.label or snap.filename }}</div>
+    <div class="snap-meta">
+      📅 {{ snap.created_at[:16].replace('T', ' ') }}<br>
+      🖥️ {{ snap.server_name }}<br>
+      🎬 {{ snap.total_items }} {{ t("snapshots.items") }} &nbsp;·&nbsp; {{ snap.size_kb }} KB
+    </div>
+    <div class="snap-actions">
+      <button class="button-secondary btn-use-ref" data-filename="{{ snap.filename }}">{{ t("snapshots.btn_use_ref") }}</button>
+      <button class="button-secondary btn-use-cur" data-filename="{{ snap.filename }}">{{ t("snapshots.btn_use_cur") }}</button>
+      <button class="button-danger btn-delete" data-filename="{{ snap.filename }}">{{ t("snapshots.btn_delete") }}</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="diff-controls">
+  <div>
+    <label>{{ t("snapshots.ref_label") }} <small class="muted">{{ t("snapshots.ref_hint") }}</small></label>
+    <select id="sel-ref">
+      <option value="">{{ t("snapshots.choose") }}</option>
+      {% for snap in snapshots %}
+      <option value="{{ snap.filename }}">{{ snap.label or snap.filename[:30] }} ({{ snap.created_at[:10] }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>{{ t("snapshots.cur_label") }} <small class="muted">{{ t("snapshots.cur_hint") }}</small></label>
+    <select id="sel-cur">
+      <option value="">{{ t("snapshots.choose") }}</option>
+      {% for snap in snapshots %}
+      <option value="{{ snap.filename }}">{{ snap.label or snap.filename[:30] }} ({{ snap.created_at[:10] }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div style="flex:0">
+    <label>&nbsp;</label>
+    <button class="button-primary" id="btn-diff">{{ t("snapshots.compare") }}</button>
+  </div>
+</div>
+
+<div class="diff-result-box" id="diff-result" style="display:none"></div>
+
+{% else %}
+<p class="muted" style="margin-top:2rem">{{ t("snapshots.no_snapshots") }}</p>
+{% endif %}
+
+<script>
+const _i18n = {
+  creating:           '<span class="spinner">⏳</span> ' + {{ t("snapshots.create") | tojson }} + '…',
+  created_prefix:     '✅ ' + {{ t("snapshots.create") | tojson }} + ' : ',
+  diff_title:         {{ t("snapshots.diff_title")         | tojson }},
+  diff_no_diff:       {{ t("snapshots.diff_no_diff")       | tojson }},
+  diff_missing_movies:{{ t("snapshots.diff_missing_movies")| tojson }},
+  diff_missing_shows: {{ t("snapshots.diff_missing_shows") | tojson }},
+  diff_partial_shows: {{ t("snapshots.diff_partial_shows") | tojson }},
+  diff_new_movies:    {{ t("snapshots.diff_new_movies")    | tojson }},
+  diff_new_shows:     {{ t("snapshots.diff_new_shows")     | tojson }},
+  diff_none:          {{ t("snapshots.diff_none")          | tojson }},
+  delete_confirm:     {{ t("snapshots.delete_confirm")     | tojson }},
+  delete_error:       {{ t("snapshots.delete_error")       | tojson }},
+  network_error:      {{ t("snapshots.network_error")      | tojson }},
+  select_both:        {{ t("snapshots.select_both")        | tojson }},
+  select_different:   {{ t("snapshots.select_different")   | tojson }},
+  diff_episodes:      {{ t("snapshots.diff_episodes")      | tojson }},
+};
+const btnCreate = document.getElementById('btn-create-snap');
+const createForm = document.getElementById('create-form');
+const btnConfirm = document.getElementById('btn-snap-confirm');
+const btnCancel = document.getElementById('btn-snap-cancel');
+const snapStatus = document.getElementById('snap-status');
+
+btnCreate?.addEventListener('click', () => {
+  createForm.style.display = createForm.style.display === 'none' ? 'block' : 'none';
+});
+btnCancel?.addEventListener('click', () => { createForm.style.display = 'none'; });
+
+btnConfirm?.addEventListener('click', async () => {
+  const label = document.getElementById('snap-label').value.trim();
+  btnConfirm.disabled = true;
+  snapStatus.innerHTML = _i18n.creating;
+  try {
+    const resp = await fetch('/snapshots/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      snapStatus.innerHTML = _i18n.created_prefix + data.filename;
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      snapStatus.innerHTML = '❌ ' + (data.error || 'Erreur inconnue');
+      btnConfirm.disabled = false;
+    }
+  } catch(e) {
+    snapStatus.innerHTML = '❌ Erreur réseau';
+    btnConfirm.disabled = false;
+  }
+});
+
+// Boutons des cartes → pré-remplir les selects
+document.querySelectorAll('.btn-use-ref').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('sel-ref').value = btn.dataset.filename;
+  });
+});
+document.querySelectorAll('.btn-use-cur').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('sel-cur').value = btn.dataset.filename;
+  });
+});
+
+// Suppression
+document.querySelectorAll('.btn-delete').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!confirm(_i18n.delete_confirm)) return;
+    const filename = btn.dataset.filename;
+    const resp = await fetch('/snapshots/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      btn.closest('.snapshot-card').remove();
+    } else {
+      alert(data.error || _i18n.delete_error);
+    }
+  });
+});
+
+// Comparaison
+document.getElementById('btn-diff')?.addEventListener('click', async () => {
+  const ref = document.getElementById('sel-ref').value;
+  const cur = document.getElementById('sel-cur').value;
+  if (!ref || !cur) { alert(_i18n.select_both); return; }
+  if (ref === cur) { alert(_i18n.select_different); return; }
+
+  const box = document.getElementById('diff-result');
+  box.style.display = 'block';
+  box.innerHTML = '<span class="spinner">⏳</span> ' + _i18n.diff_title + '…';
+
+  try {
+    const resp = await fetch(`/snapshots/diff?ref=${encodeURIComponent(ref)}&current=${encodeURIComponent(cur)}`);
+    const data = await resp.json();
+    if (!data.ok) { box.innerHTML = '❌ ' + (data.error || 'Erreur'); return; }
+    box.innerHTML = renderDiff(data);
+  } catch(e) {
+    box.innerHTML = '❌ Erreur réseau';
+  }
+});
+
+function renderDiff(data) {
+  const total_missing = data.missing_movies.length + data.missing_shows.length + data.partial_shows.length;
+  let html = `<h3>${_i18n.diff_title}</h3>`;
+
+  if (total_missing === 0) {
+    html += `<p style="color:var(--green,#4caf50)">${_i18n.diff_no_diff}</p>`;
+  }
+
+  html += renderCategory(
+    _i18n.diff_missing_movies, data.missing_movies,
+    item => `<li><span>${item.title}</span><span class="diff-year">${item.year || ''}</span></li>`
+  );
+  html += renderCategory(
+    _i18n.diff_missing_shows, data.missing_shows,
+    item => `<li><span>${item.title}</span><span class="diff-year">${item.year || ''}</span></li>`
+  );
+  html += renderPartialShows(data.partial_shows);
+  html += renderCategory(
+    _i18n.diff_new_movies, data.new_movies,
+    item => `<li><span>${item.title}</span><span class="diff-year">${item.year || ''}</span></li>`,
+    'dimmed'
+  );
+  html += renderCategory(
+    _i18n.diff_new_shows, data.new_shows,
+    item => `<li><span>${item.title}</span><span class="diff-year">${item.year || ''}</span></li>`,
+    'dimmed'
+  );
+  return html;
+}
+
+function renderCategory(title, items, rowFn, cls='') {
+  const badge = `<span class="diff-badge">${items.length}</span>`;
+  let html = `<div class="diff-category ${cls}"><h4>${title} ${badge}</h4>`;
+  if (!items.length) {
+    html += `<div class="diff-empty">${_i18n.diff_none}</div>`;
+  } else {
+    html += `<ul class="diff-list">${items.map(rowFn).join('')}</ul>`;
+  }
+  return html + '</div>';
+}
+
+function renderPartialShows(items) {
+  const badge = `<span class="diff-badge">${items.length}</span>`;
+  let html = `<div class="diff-category"><h4>${_i18n.diff_partial_shows} ${badge}</h4>`;
+  if (!items.length) {
+    html += `<div class="diff-empty">${_i18n.diff_none}</div>`;
+  } else {
+    html += `<ul class="diff-list">`;
+    for (const show of items) {
+      const eps = show.missing_episodes.map(e => `S${String(e.season).padStart(2,'0')}E${String(e.episode).padStart(2,'0')}`).join(', ');
+      html += `<li>
+        <span>${show.title}</span>
+        <span class="diff-year">${show.year || ''}</span>
+        <span class="diff-eps-detail">${show.missing_episodes.length} ${_i18n.diff_episodes} : ${eps}</span>
+      </li>`;
+    }
+    html += `</ul>`;
+  }
+  return html + '</div>';
+}
+</script>
+{% endblock %}

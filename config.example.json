@@ -1,0 +1,57 @@
+{
+  "TMDB_API_KEY": "",
+  "REFRESH_DELAY_DAYS": 30,
+  "REFRESH_TIME": "03:00",
+  "LOG_RETENTION_DAYS": 7,
+
+  "RESOLUTION_FILTER_MODE": "none",
+  "COMPARE_USE_BITRATE": false,
+  "MIN_BITRATE_DIFF_PERCENT": 10,
+  "IGNORE_TRANSCODED_IN_BETTER": false,
+
+  "SHOW_ONLY_LABELS": [],
+  "EXCLUDED_LIBRARIES": [],
+
+  "MKVTOOLNIX_BIN": "/usr/bin",
+  "DEFAULT_AUDIO_LANG": "fr-CA",
+  "DEFAULT_SUBTITLE_LANG": "fr-CA",
+
+  "MKV_SOURCE_DIRS": [],
+  "DESTINATIONS_MKV": {},
+
+  "LOG_LEVEL": "INFO",
+  "LANGUAGE": "fr",
+
+  "FTP_SERVERS": [
+    {
+      "id": "ftp_1",
+      "name": "Mon serveur FTP",
+      "enabled": true,
+      "host": "ftp.example.com",
+      "port": 21,
+      "user": "username",
+      "pass": "password",
+      "tls": true,
+      "passive": true,
+      "roots": ["/Films", "/Series"],
+      "plex_servers": ["Nom du serveur Plex distant"],
+      "download_dir_movies": "/inbox/FTP/Films",
+      "download_dir_shows": "/inbox/FTP/Series",
+      "refresh_hours": 12
+    }
+  ],
+
+  "DOWNLOAD_PATH": "/dest",
+  "SOURCE_PATH": "/sources",
+
+  "AUTO_DOWNLOAD_ENABLED": false,
+  "AUTO_DOWNLOAD_START": "00:00",
+  "AUTO_DOWNLOAD_END": "06:00",
+  "FTP_AUTO_MAX_PER_DAY": 0,
+  "FTP_AUTO_SKIP_DAYS": [],
+  "MAX_PARALLEL_DOWNLOADS": 1,
+
+  "AUTO_MKV_ENABLED": false,
+  "AUTO_MKV_DST_MOVIES": "",
+  "AUTO_MKV_DST_SHOWS": ""
+}

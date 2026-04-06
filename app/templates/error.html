@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Erreur {{ code }} — PlexHarvester{% endblock %}
+
+{% block content %}
+<div style="text-align:center; padding: 4rem 2rem;">
+  <h2>{{ icon }} Erreur {{ code }}</h2>
+  <p style="font-size:1.1rem; margin: 1rem 0;">{{ message }}</p>
+  {% if detail %}
+    <p class="muted" style="font-size:0.85rem; font-family:monospace;">{{ detail }}</p>
+  {% endif %}
+  <div style="margin-top: 2rem;">
+    <a href="javascript:history.back()" class="button-secondary">{{ t("error.back") }}</a>
+  </div>
+</div>
+{% endblock %}

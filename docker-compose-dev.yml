@@ -1,0 +1,16 @@
+services:
+  plex-compare:
+    container_name: plex-compare
+    build:
+      context: .
+    image: plex-compare:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./config:/config
+      - /mnt:/mnt
+    environment:
+      TZ: ${TZ:-America/Montreal}
+      PYTHONUNBUFFERED: "1"
+      PLEX_COMPARE_CONFIG_DIR: /config
+    restart: unless-stopped

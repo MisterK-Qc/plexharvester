@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <title>{% block title %}PlexHarvester{% endblock %}</title>
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+<nav class="main-nav">
+  {% set ep = request.endpoint %}
+  <a href="{{ url_for('dashboard.dashboard') }}"
+     class="main-nav-tab {% if ep == 'dashboard.dashboard' %}active{% endif %}">
+    {{ t("nav.comparison") }}
+  </a>
+  <a href="{{ url_for('my_dashboard.my_dashboard') }}"
+     class="main-nav-tab {% if ep in ('my_dashboard.my_dashboard', 'my_dashboard.my_dashboard_loading') %}active{% endif %}">
+    {{ t("nav.my_server") }}
+  </a>
+  <a href="{{ url_for('mkv.mkvtoolnix_dashboard') }}"
+     class="main-nav-tab {% if ep == 'mkv.mkvtoolnix_dashboard' %}active{% endif %}"
+     id="main-nav-mkv">
+    {{ t("nav.mkv") }}
+    <span class="mkv-badge" id="mkv-nav-badge" style="display:none"></span>
+  </a>
+  <a href="{{ url_for('snapshot.snapshots_page') }}"
+     class="main-nav-tab {% if ep == 'snapshot.snapshots_page' %}active{% endif %}">
+    {{ t("nav.snapshots") }}
+  </a>
+  <a href="{{ url_for('config.config_page') }}"
+     class="main-nav-tab {% if ep == 'config.config_page' %}active{% endif %}">
+    {{ t("nav.config") }}
+  </a>
+  <a href="{{ url_for('auth.select_server') }}"
+     class="main-nav-tab {% if ep == 'auth.select_server' %}active{% endif %}">
+    {{ t("nav.server") }}
+  </a>
+  <span class="main-nav-spacer"></span>
+  <a href="{{ url_for('auth.logout') }}" class="main-nav-tab logout">{{ t("nav.logout") }}</a>
+</nav>
+
+{% block content %}{% endblock %}
+<script>
+(function(){
+  var nav = document.querySelector('.main-nav');
+  if (nav) document.documentElement.style.setProperty('--nav-h', nav.offsetHeight + 'px');
+  var hdr = document.querySelector('header');
+  if (hdr) document.documentElement.style.setProperty('--header-h', hdr.offsetHeight + 'px');
+})();
+</script>
+
+{% block scripts %}{% endblock %}
+
+{% if request.endpoint != 'mkv.mkvtoolnix_dashboard' %}
+<script>
+(function() {
+  const badge = document.getElementById('mkv-nav-badge');
+  if (!badge) return;
+
+  let _badgeDoneTimer = null;
+
+  function poll() {
+    fetch('/mkv_status')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || data.status === 'idle') {
+          // Si le badge affichait un % et passe soudainement à idle → flash "✔"
+          if (badge.style.display !== 'none' && badge.textContent !== '✔') {
+            clearTimeout(_badgeDoneTimer);
+            badge.style.display = 'inline-block';
+            badge.textContent = '✔';
+            _badgeDoneTimer = setTimeout(() => { badge.style.display = 'none'; }, 3000);
+          }
+        } else {
+          clearTimeout(_badgeDoneTimer);
+          badge.style.display = 'inline-block';
+          badge.textContent = data.status === 'pending' ? '…' : data.percent + '%';
+        }
+      })
+      .catch(() => { badge.style.display = 'none'; });
+  }
+
+  poll();
+  setInterval(poll, 3000);
+})();
+</script>
+{% endif %}
+
+</body>
+</html>

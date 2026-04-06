@@ -1,0 +1,585 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t("mkv.page_title") }}{% endblock %}
+{% block body_class %}page-mkvtoolnix{% endblock %}
+
+{% macro language_badge(entry, language_list=[]) -%}
+  {% if entry is mapping %}
+    {% set txt = entry.label %}
+    {% set l = entry.lang_code|lower %}
+    {% set track_idx = entry.track_index %}
+  {% else %}
+    {% set txt = (entry|string).strip() %}
+    {% set l = txt|lower %}
+    {% set track_idx = 0 %}
+  {% endif %}
+  {% set force_region = '' %}
+  {% if 'vfq' in l or 'québec' in l or 'quebec' in l or ' qc' in l or 'fr-ca' in l or '(qc' in l or 'canada' in l or 'canadien' in l %}
+    {% set force_region = 'ca' %}
+  {% endif %}
+  {% set head = l.split('(')[0].strip() %}
+  {% set code = head.split()[0].replace('_','-') %}
+  {% set iso3_to_iso1 = {
+    'eng':'en','fre':'fr','fra':'fr','ger':'de','deu':'de','spa':'es','por':'pt','ita':'it',
+    'jpn':'ja','kor':'ko','rus':'ru','ara':'ar','heb':'he','zho':'zh','ces':'cs','cze':'cs',
+    'slk':'sk','slo':'sk','ell':'el','gre':'el','pol':'pl','ron':'ro','rum':'ro','hun':'hu',
+    'nld':'nl','dut':'nl','ukr':'uk','vie':'vi','tha':'th','ind':'id','fas':'fa','per':'fa'
+  } %}
+  {% if code|length == 3 and code in iso3_to_iso1 %}{% set code = iso3_to_iso1[code] %}{% endif %}
+  {% set parts = code.split('-') %}
+  {% set base = parts[0] %}
+  {% set region = parts[1] if parts|length > 1 else '' %}
+  {% set cc = 'xx' %}
+  {% if force_region %}
+    {% set cc = force_region %}
+  {% elif region and region|length == 2 %}
+    {% set cc = region %}
+  {% else %}
+    {% set fallback = {
+      'fr':'fr','en':'us','en-us':'us','en-gb':'gb','es':'es','pt':'pt','pt-br':'br','de':'de','it':'it','nl':'nl',
+      'sv':'se','no':'no','da':'dk','fi':'fi','ru':'ru','uk':'ua','pl':'pl','cs':'cz','sk':'sk',
+      'ro':'ro','hu':'hu','el':'gr','tr':'tr','he':'il','ar':'sa','fa':'ir','ur':'pk',
+      'hi':'in','bn':'bd','ta':'in','te':'in','ml':'in','mr':'in','pa':'in','gu':'in',
+      'zh':'cn','zh-cn':'cn','zh-tw':'tw','zh-hk':'hk','ja':'jp','ko':'kr','th':'th','vi':'vn','id':'id'
+    } %}
+    {% set cc = fallback.get(code, fallback.get(base, 'xx')) %}
+  {% endif %}
+  <span class="pill lang-pill">
+    <img class="language-flag" src="https://flagcdn.com/24x18/{{ cc }}.png" width="24" height="18" alt=""
+         onerror="this.replaceWith(document.createTextNode('🏳️'))">
+    <span>{{ txt }}</span>
+    {% if language_list and track_idx %}
+    <select class="lang-override" data-track-index="{{ track_idx }}" title="Changer la langue de cette piste">
+      {% for ll in language_list %}
+        <option value="{{ ll }}" {% if ll|lower == l %}selected{% endif %}>{{ ll }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+  </span>
+{%- endmacro %}
+
+{% block content %}
+{% if not mkvtoolnix_configured %}
+  <div class="warning-box">
+    <h3>{{ t("mkv.config_required") }}</h3>
+    <p>{{ t("mkv.config_msg") }}</p>
+    <div class="button-group">
+      <a href="{{ url_for('config.config_page') }}" class="button-primary">{{ t("mkv.go_to_config") }}</a>
+      <a href="https://mkvtoolnix.download/" target="_blank" rel="noopener noreferrer" class="button-secondary">{{ t("mkv.download") }}</a>
+    </div>
+  </div>
+{% else %}
+
+  <header>
+    <h1>{{ t("mkv.header_prefix") }} — {{ t("mkv.header_track_label") }} {{ config.get("DEFAULT_AUDIO_LANG", "fr-CA") }}</h1>
+    <p class="muted">{{ t("mkv.tip") }}</p>
+  </header>
+
+  <div class="storage-panel">
+    <div class="storage-header">
+      <span>{{ t("mkv.disk_space") }}</span>
+      <span class="toggle-icon">+</span>
+    </div>
+    <div class="storage-content">
+      <h4 class="storage-subtitle">{{ t("mkv.sources") }}</h4>
+      <div class="storage-grid">
+        {% for s in source_space or [] %}
+          <div class="storage-card">
+            <div class="storage-card-title">{{ s.path }}</div>
+            {% if s.exists %}
+              <div><strong>{{ s.free_human }}</strong> {{ t("mkv.free") }}</div>
+              <div class="muted">{{ s.total_human }} {{ t("mkv.total_pct", percent=s.percent_used) }}</div>
+            {% else %}
+              <div class="status error">{{ t("mkv.path_unavailable") }}</div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="storage-card">{{ t("mkv.no_sources") }}</div>
+        {% endfor %}
+      </div>
+      <h4 class="storage-subtitle" style="margin-top: 1.25rem;">{{ t("mkv.destinations") }}</h4>
+      <div class="storage-grid">
+        {% for name, d in (destination_space or {}).items() %}
+          <div class="storage-card">
+            <div class="storage-card-title">{{ name }}</div>
+            <div class="muted storage-path">{{ d.path }}</div>
+            {% if d.exists %}
+              <div><strong>{{ d.free_human }}</strong> {{ t("mkv.free") }}</div>
+              <div class="muted">{{ d.total_human }} {{ t("mkv.total_pct", percent=d.percent_used) }}</div>
+            {% else %}
+              <div class="status error">{{ t("mkv.path_unavailable") }}</div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="storage-card">{{ t("mkv.no_destinations") }}</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="button-group">
+    <span><strong>{{ t("mkv.movies_count") }}</strong> {{ movie_count or 0 }}</span>
+    <span><strong>{{ t("mkv.series_count") }}</strong> {{ series_count or 0 }}</span>
+  </div>
+
+  <div id="global-progress"><span id="progress-label">{{ t("mkv.waiting") }}</span></div>
+
+  <h2>{{ t("mkv.movies_title") }}</h2>
+  {% if files and files|length > 0 %}
+    <table>
+      <thead>
+        <tr>
+          <th>{{ t("mkv.th_file") }}</th>
+          <th>{{ t("mkv.th_languages") }}</th>
+          <th>{{ t("mkv.th_destination") }}</th>
+          <th>{{ t("mkv.th_action") }}</th>
+          <th>{{ t("mkv.th_status") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for file in files %}
+          <tr data-filename="{{ file.b64 }}"
+              data-plex-title="{{ file.plex_title or file.title or '' }}"
+              data-plex-year="{{ file.plex_year or file.year or '' }}">
+            <td>{{ file.path | underscore_to_dash }}</td>
+            <td>
+              {% for lg in file.languages %}{{ language_badge(lg, mkv_language_list) }}
+              {% else %}<span class="pill">N/A</span>{% endfor %}
+            </td>
+            <td>
+              <select class="category-select">
+                {% for category in film_categories %}
+                  <option value="{{ category }}" {% if category|lower == 'films' %}selected{% endif %}>{{ category }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <button class="process-btn button-primary">{{ t("mkv.btn_launch") }}</button>
+              <button class="delete-btn button-danger">{{ t("mkv.btn_delete") }}</button>
+            </td>
+            <td class="status">{{ t("mkv.status_waiting") }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">{{ t("mkv.no_files") }}</p>
+  {% endif %}
+
+  <h2>{{ t("mkv.series_title") }}</h2>
+  {% if folders and folders|length > 0 %}
+    <table>
+      <thead>
+        <tr>
+          <th>{{ t("mkv.th_folder") }}</th>
+          <th>{{ t("mkv.th_languages_sample") }}</th>
+          <th>{{ t("mkv.th_destination") }}</th>
+          <th>{{ t("mkv.th_action") }}</th>
+          <th>{{ t("mkv.th_status") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for folder in folders %}
+          <tr data-filename="{{ folder.b64 }}"
+              data-plex-title="{{ folder.plex_title or folder.title or folder.folder_clean or '' }}"
+              data-plex-year="{{ folder.plex_year or folder.year or '' }}">
+            <td>{{ folder.folder | underscore_to_dash }} ({{ folder.count }} épisode{{ 's' if folder.count > 1 else '' }})</td>
+            <td>
+              {% for lg in folder.languages %}{{ language_badge(lg, mkv_language_list) }}
+              {% else %}<span class="pill">N/A</span>{% endfor %}
+            </td>
+            <td>
+              <select class="category-select">
+                {% for category in serie_categories %}
+                  <option value="{{ category }}" {% if category|lower in ['séries','series','shows'] %}selected{% endif %}>{{ category }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <button class="process-folder-btn button-primary">{{ t("mkv.btn_process_folder") }}</button>
+              <button class="delete-btn button-danger">{{ t("mkv.btn_delete") }}</button>
+            </td>
+            <td class="status">{{ t("mkv.status_waiting") }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">{{ t("mkv.no_folders") }}</p>
+  {% endif %}
+
+  <div class="add-lang-row" style="margin-top:1rem;display:flex;align-items:center;gap:.5rem;">
+    <span class="muted" style="font-size:.85rem;">{{ t("mkv.add_lang_label") }}</span>
+    <input id="add-lang-input" type="text" placeholder="{{ t('mkv.add_lang_placeholder') }}" maxlength="12"
+           style="width:7rem;padding:.25rem .4rem;border-radius:4px;border:1px solid #555;background:#1e1e2e;color:inherit;font-size:.85rem;">
+    <button id="add-lang-btn" class="button-secondary" style="padding:.25rem .6rem;font-size:.85rem;">+</button>
+    <span id="add-lang-msg" style="font-size:.8rem;"></span>
+  </div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<style>
+.lang-override {
+  font-size: 0.7rem;
+  padding: 0 2px;
+  border-radius: 3px;
+  border: 1px solid #666;
+  background: #1e1e2e;
+  color: inherit;
+  cursor: pointer;
+  max-width: 76px;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+</style>
+<script>
+(() => {
+  const destinations = {{ (destinations or {}) | tojson }};
+  const activeStreams = {};
+  const globalProgress = document.getElementById('global-progress');
+  const progressLabel = document.getElementById('progress-label');
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const storageHeader = document.querySelector('.storage-header');
+    const storageContent = document.querySelector('.storage-content');
+    const toggleIcon = document.querySelector('.storage-header .toggle-icon');
+    if (storageHeader && storageContent) {
+      storageHeader.addEventListener('click', () => {
+        const isOpen = storageContent.classList.toggle('open');
+        if (toggleIcon) toggleIcon.textContent = isOpen ? '−' : '+';
+      });
+    }
+
+    // Reconnexion SSE si un job était actif avant navigation
+    (async () => {
+      try {
+        const r = await fetch('/mkv_status');
+        if (!r.ok) return;
+        const live = await r.json();
+
+        let jobId, filename;
+
+        if (live.status !== 'idle' && live.job_id && live.filename) {
+          // Job encore actif côté serveur
+          jobId = live.job_id;
+          filename = live.filename;
+          localStorage.setItem('mkv_active_job', JSON.stringify({ job_id: jobId, filename }));
+        } else {
+          // Job peut-être terminé pendant la navigation — vérifier localStorage
+          const saved = (() => { try { return JSON.parse(localStorage.getItem('mkv_active_job') || 'null'); } catch { return null; } })();
+          if (!saved || !saved.job_id || !saved.filename) return;
+          jobId = saved.job_id;
+          filename = saved.filename;
+        }
+
+        const rows = document.querySelectorAll('tr[data-filename]');
+        for (const row of rows) {
+          if (utf8FromB64(row.dataset.filename) === filename) {
+            const isFolder = !!row.querySelector('.process-folder-btn');
+            row.dataset.jobId = jobId;
+            setRowState(row, 'pending', isFolder);
+            startSSE(jobId, row, isFolder);
+            break;
+          }
+        }
+      } catch {}
+    })();
+  });
+
+  function utf8FromB64(b64) {
+    try {
+      if (window.TextDecoder) {
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+      }
+      return decodeURIComponent(escape(atob(b64)));
+    } catch { return atob(b64); }
+  }
+
+  function newJobId() { return 'job-' + Math.random().toString(36).slice(2); }
+
+  function closeStream(id) {
+    const s = activeStreams[id];
+    if (s) { try { s.close(); } catch {} delete activeStreams[id]; }
+  }
+
+  function setRowState(row, state, isFolder, data = null) {
+    const btn = row.querySelector('.process-btn, .process-folder-btn');
+    const statusCell = row.querySelector('.status');
+    if (!btn || !statusCell) return;
+    row.dataset.state = state;
+
+    if (state === 'idle') {
+      btn.disabled = false; btn.textContent = isFolder ? '📁 Traiter le dossier' : 'Lancer';
+      statusCell.textContent = 'En attente'; statusCell.className = 'status'; return;
+    }
+    if (state === 'pending') {
+      btn.disabled = false; btn.textContent = 'Annuler';
+      statusCell.textContent = '🕒 En attente'; statusCell.className = 'status processing'; return;
+    }
+    if (state === 'running') {
+      btn.disabled = false; btn.textContent = 'Annuler';
+      statusCell.textContent = data ? `⏳ ${data.current}/${data.total} (${data.percent}%)` : '⏳ En traitement...';
+      statusCell.className = 'status processing'; return;
+    }
+    if (state === 'cancelled') {
+      btn.disabled = false; btn.textContent = 'Annulé';
+      statusCell.textContent = '🛑 Annulé'; statusCell.className = 'status error'; return;
+    }
+    if (state === 'done') {
+      btn.disabled = false; btn.textContent = 'Terminé';
+      statusCell.textContent = data ? `✔️ ${data.current}/${data.total} (${data.percent}%)` : '✔️ Terminé';
+      statusCell.className = 'status success';
+      localStorage.removeItem('mkv_active_job'); return;
+    }
+    if (state === 'error') {
+      btn.disabled = false; btn.textContent = isFolder ? '📁 Traiter le dossier' : 'Lancer';
+      statusCell.textContent = data && data.error ? `❌ ${data.error}` : '❌ Erreur';
+      statusCell.className = 'status error';
+      localStorage.removeItem('mkv_active_job');
+    }
+  }
+
+  function startSSE(id, row, isFolder) {
+    closeStream(id);
+    const es = new EventSource(`/progress_stream/${id}`);
+    activeStreams[id] = es;
+
+    es.onmessage = (ev) => {
+      if (!ev.data) return;
+      const data = JSON.parse(ev.data);
+
+      if (data.status === 'pending') { setRowState(row, 'pending', isFolder, data); return; }
+      if (data.status === 'running') {
+        setRowState(row, 'running', isFolder, data);
+        if (globalProgress) { globalProgress.style.display = 'block'; progressLabel.textContent = `⏳ ${data.current}/${data.total} (${data.percent}%)`; }
+        return;
+      }
+      if (data.cancelled || data.status === 'cancelled') {
+        setRowState(row, 'cancelled', isFolder, data);
+        if (progressLabel) progressLabel.textContent = '🛑 Annulé';
+        closeStream(id); localStorage.removeItem('mkv_active_job');
+        setTimeout(() => { if (globalProgress) globalProgress.style.display = 'none'; }, 1200); return;
+      }
+      if (data.status === 'done' || data.done) {
+        setRowState(row, 'done', isFolder, data);
+        if (progressLabel) progressLabel.textContent = '✅ Terminé';
+        closeStream(id); localStorage.removeItem('mkv_active_job');
+        setTimeout(() => { if (globalProgress) globalProgress.style.display = 'none'; }, 1200); return;
+      }
+      if (data.status === 'error') {
+        setRowState(row, 'error', isFolder, data);
+        if (progressLabel) progressLabel.textContent = '❌ Erreur';
+        closeStream(id); localStorage.removeItem('mkv_active_job');
+        setTimeout(() => { if (globalProgress) globalProgress.style.display = 'none'; }, 1200);
+      }
+      if (data.status === 'unknown') {
+        // Job introuvable côté serveur (redémarrage conteneur, TTL expiré)
+        setRowState(row, 'idle', isFolder);
+        if (progressLabel) progressLabel.textContent = '';
+        if (globalProgress) globalProgress.style.display = 'none';
+        closeStream(id); localStorage.removeItem('mkv_active_job');
+      }
+    };
+
+    es.onerror = () => {
+      const state = row.dataset.state || '';
+      if (state !== 'done' && state !== 'cancelled' && state !== 'idle') {
+        setRowState(row, 'error', isFolder, { error: 'Erreur SSE' });
+        if (progressLabel) progressLabel.textContent = '❌ Erreur SSE';
+      }
+      closeStream(id);
+    };
+  }
+
+  function collectLangOverrides(row) {
+    const overrides = {};
+    row.querySelectorAll('select.lang-override').forEach(sel => {
+      const idx = sel.dataset.trackIndex;
+      if (idx) overrides[idx] = sel.value;
+    });
+    return overrides;
+  }
+
+  async function startJob(row, isFolder) {
+    const filename = utf8FromB64(row.dataset.filename);
+    const category = row.querySelector('.category-select').value;
+    const statusCell = row.querySelector('.status');
+    const plexTitle = row.dataset.plexTitle || '';
+    const plexYear = row.dataset.plexYear || '';
+    const languageOverrides = collectLangOverrides(row);
+
+    if (!category || !(category in (destinations || {}))) {
+      statusCell.textContent = '❌ Destination invalide (voir Config)';
+      statusCell.className = 'status error'; return;
+    }
+
+    const id = newJobId();
+    row.dataset.jobId = id;
+    localStorage.setItem('mkv_active_job', JSON.stringify({ job_id: id, filename }));
+
+    if (globalProgress) globalProgress.style.display = 'block';
+    if (progressLabel) progressLabel.textContent = '🕒 Ajout à la file...';
+    setRowState(row, 'pending', isFolder);
+
+    try {
+      const res = await fetch('{{ url_for("mkv.process_mkv") }}', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, category, job_id: id, plex_title: plexTitle, plex_year: plexYear, language_overrides: languageOverrides })
+      });
+      const data = await res.json();
+      if (data.status === 'error') {
+        setRowState(row, 'error', isFolder, { error: data.message || 'Erreur' });
+        if (progressLabel) progressLabel.textContent = '❌ Erreur'; return;
+      }
+      startSSE(id, row, isFolder);
+    } catch {
+      setRowState(row, 'error', isFolder, { error: 'Erreur réseau' });
+      if (progressLabel) progressLabel.textContent = '❌ Erreur réseau';
+    }
+  }
+
+  async function cancelJob(row, isFolder) {
+    const id = row.dataset.jobId;
+    if (!id) return;
+    try {
+      const res = await fetch('{{ url_for("mkv.cancel_mkv") }}', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: id })
+      });
+      const data = await res.json();
+      if (data.status === 'error') { setRowState(row, 'error', isFolder, { error: data.message || 'Impossible d\'annuler' }); return; }
+      const currentState = row.dataset.state || '';
+      if (currentState === 'pending') {
+        setRowState(row, 'cancelled', isFolder);
+        if (progressLabel) progressLabel.textContent = '🛑 Job annulé';
+        closeStream(id);
+      } else {
+        if (progressLabel) progressLabel.textContent = '🛑 Annulation demandée...';
+      }
+    } catch { setRowState(row, 'error', isFolder, { error: 'Impossible d\'annuler' }); }
+  }
+
+  async function handleClick(btn, isFolder) {
+    const row = btn.closest('tr');
+    const state = row.dataset.state || 'idle';
+    if (state === 'pending' || state === 'running') { await cancelJob(row, isFolder); return; }
+    if (state === 'done' || state === 'cancelled' || state === 'error' || state === 'idle') { await startJob(row, isFolder); }
+  }
+
+  document.querySelectorAll('.process-btn').forEach((b) => {
+    const row = b.closest('tr');
+    row.dataset.state = 'idle';
+    b.addEventListener('click', () => handleClick(b, false));
+  });
+  document.querySelectorAll('.process-folder-btn').forEach((b) => {
+    const row = b.closest('tr');
+    row.dataset.state = 'idle';
+    b.addEventListener('click', () => handleClick(b, true));
+  });
+
+  async function deleteItem(btn) {
+    const row = btn.closest('tr');
+    const state = row.dataset.state || 'idle';
+    if (state === 'pending' || state === 'running') return;
+    const filename = utf8FromB64(row.dataset.filename);
+    if (!confirm(`Supprimer définitivement :\n${filename} ?`)) return;
+    const statusCell = row.querySelector('.status');
+    statusCell.textContent = '⏳ Suppression…'; statusCell.className = 'status processing';
+    btn.disabled = true;
+    try {
+      const res = await fetch('{{ url_for("mkv.delete_mkv") }}', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename })
+      });
+      const data = await res.json();
+      if (data.status === 'ok') { row.remove(); }
+      else { statusCell.textContent = `❌ ${data.message || 'Erreur'}`; statusCell.className = 'status error'; btn.disabled = false; }
+    } catch { statusCell.textContent = '❌ Erreur réseau'; statusCell.className = 'status error'; btn.disabled = false; }
+  }
+
+  document.querySelectorAll('.delete-btn').forEach((b) => {
+    b.addEventListener('click', () => deleteItem(b));
+  });
+
+  const _flagFallback = {
+    'fr':'fr','en':'us','en-us':'us','en-gb':'gb','es':'es','pt':'pt','pt-br':'br',
+    'de':'de','it':'it','nl':'nl','sv':'se','no':'no','da':'dk','fi':'fi',
+    'ru':'ru','uk':'ua','pl':'pl','cs':'cz','sk':'sk','ro':'ro','hu':'hu',
+    'el':'gr','tr':'tr','he':'il','ar':'sa','fa':'ir','ur':'pk',
+    'hi':'in','ja':'jp','ko':'kr','zh':'cn','zh-cn':'cn','zh-tw':'tw','zh-hk':'hk',
+    'th':'th','vi':'vn','id':'id','fil':'ph',
+  };
+
+  function langToCC(code) {
+    const l = (code || '').toLowerCase().trim();
+    if (l === 'fr-ca' || l === 'fr_ca') return 'ca';
+    const parts = l.split('-');
+    const base = parts[0];
+    const region = parts[1] || '';
+    if (region.length === 2) return region;
+    return _flagFallback[l] || _flagFallback[base] || 'xx';
+  }
+
+  document.querySelectorAll('select.lang-override').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const pill = sel.closest('.pill');
+      if (!pill) return;
+      const img = pill.querySelector('img.language-flag');
+      const labelSpan = pill.querySelector('span');
+      if (img) {
+        const cc = langToCC(sel.value);
+        img.src = `https://flagcdn.com/24x18/${cc}.png`;
+      }
+      if (labelSpan) labelSpan.textContent = sel.value;
+    });
+  });
+
+  const addLangBtn = document.getElementById('add-lang-btn');
+  const addLangInput = document.getElementById('add-lang-input');
+  const addLangMsg = document.getElementById('add-lang-msg');
+  if (addLangBtn) {
+    addLangBtn.addEventListener('click', async () => {
+      const code = (addLangInput.value || '').trim();
+      if (!code) return;
+      addLangBtn.disabled = true;
+      addLangMsg.textContent = '';
+      try {
+        const res = await fetch('/mkv_languages', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          const langs = data.languages || [];
+          document.querySelectorAll('select.lang-override').forEach(sel => {
+            const cur = sel.value;
+            if (!Array.from(sel.options).some(o => o.value === code)) {
+              const opt = document.createElement('option');
+              opt.value = code; opt.textContent = code;
+              // Insérer en ordre alphabétique
+              const after = Array.from(sel.options).find(o => o.value.toLowerCase() > code.toLowerCase());
+              after ? sel.insertBefore(opt, after) : sel.appendChild(opt);
+            }
+            sel.value = cur;
+          });
+          addLangInput.value = '';
+          addLangMsg.style.color = 'var(--success, #4caf50)';
+          addLangMsg.textContent = `✔ ${code} ajouté`;
+        } else {
+          addLangMsg.style.color = 'var(--error, #f44336)';
+          addLangMsg.textContent = data.message || 'Erreur';
+        }
+      } catch {
+        addLangMsg.style.color = 'var(--error, #f44336)';
+        addLangMsg.textContent = 'Erreur réseau';
+      }
+      addLangBtn.disabled = false;
+    });
+    addLangInput.addEventListener('keydown', e => { if (e.key === 'Enter') addLangBtn.click(); });
+  }
+})();
+</script>
+{% endblock %}
