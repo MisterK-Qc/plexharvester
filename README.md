@@ -2,8 +2,13 @@
 
 **PlexHarvester** is a self-hosted web application that compares your local Plex library against shared remote servers, indexes FTP sources for automatic downloading, and manages MKV audio tracks — all from a clean web interface.
 
+<<<<<<< HEAD
+[![Docker Pulls](https://img.shields.io/docker/pulls/misterkqc/plexharvester)](https://hub.docker.com/r/misterkqc/plexharvester)
+[![Docker Image Size](https://img.shields.io/docker/image-size/misterkqc/plexharvester/latest)](https://hub.docker.com/r/misterkqc/plexharvester)
+=======
 [![Docker Pulls](https://img.shields.io/docker/pulls/misterk-qc/plexharvester)](https://hub.docker.com/r/misterk-qc/plexharvester)
 [![Docker Image Size](https://img.shields.io/docker/image-size/misterk-qc/plexharvester/latest)](https://hub.docker.com/r/misterk-qc/plexharvester)
+>>>>>>> 3aeeddc98f0e02a83f27f9fc3db849f540c4f755
 [![GitHub release](https://img.shields.io/github/v/release/MisterK-Qc/plexharvester)](https://github.com/MisterK-Qc/plexharvester/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -28,7 +33,11 @@
 ```yaml
 services:
   plexharvester:
+<<<<<<< HEAD
+    image: misterkqc/plexharvester:latest
+=======
     image: misterk-qc/plexharvester:latest
+>>>>>>> 3aeeddc98f0e02a83f27f9fc3db849f540c4f755
     container_name: plexharvester
     ports:
       - "5000:5000"
@@ -52,7 +61,11 @@ docker run -d \
   -e TZ="America/Montreal" \
   -v /mnt/user/appdata/plexharvester:/config \
   --restart unless-stopped \
+<<<<<<< HEAD
+  misterkqc/plexharvester:latest
+=======
   misterk-qc/plexharvester:latest
+>>>>>>> 3aeeddc98f0e02a83f27f9fc3db849f540c4f755
 ```
 
 ---
@@ -65,11 +78,31 @@ docker run -d \
 3. Click Install — all fields are pre-filled, just enter your `SECRET_KEY`
 
 ### Option 2 — Template URL
+<<<<<<< HEAD
+
+1. In Unraid → **Docker** → **Add Container**
+2. At the very **top of the page**, find the **"Template URL"** field
+3. Paste the URL below and click the **arrow button** next to it:
+   ```
+   https://raw.githubusercontent.com/MisterK-Qc/plexharvester/main/unraid-template/plexharvester.xml
+   ```
+4. All fields pre-fill automatically — enter your `SECRET_KEY` and click **Apply**
+
+### Option 3 — Via SSH (saves template permanently)
+
+Run this once in your Unraid terminal:
+```bash
+wget -O /boot/config/plugins/dockerMan/templates-user/plexharvester.xml \
+  https://raw.githubusercontent.com/MisterK-Qc/plexharvester/main/unraid-template/plexharvester.xml
+```
+Then: **Docker → Add Container** → select **PlexHarvester** under *User Templates*
+=======
 1. In Unraid → **Docker** → **Add Container**
 2. At the very top of the page, find the **"Template URL"** field
 3. Paste the URL below and click the arrow button next to it:
 https://raw.githubusercontent.com/MisterK-Qc/plexharvester/main/unraid-template/plexharvester.xml
 
+>>>>>>> 3aeeddc98f0e02a83f27f9fc3db849f540c4f755
 
 4. All fields pre-fill automatically — enter your `SECRET_KEY` and click **Apply**
 
