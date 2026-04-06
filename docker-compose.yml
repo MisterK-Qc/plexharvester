@@ -1,6 +1,6 @@
 services:
   plexharvester:
-    image: misterkqc/plexharvester:latest
+    image: misterk-qc/plexharvester:latest
     container_name: plexharvester
     ports:
       - "5000:5000"
