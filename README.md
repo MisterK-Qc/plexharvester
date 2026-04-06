@@ -60,42 +60,34 @@ docker run -d \
 ## Unraid Installation
 
 ### Option 1 — Community Applications (recommended)
-
 1. In Unraid, open **Apps** (Community Applications)
 2. Search for **PlexHarvester**
-3. Click Install and fill in the required fields (see [Environment Variables](#environment-variables))
+3. Click Install — all fields are pre-filled, just enter your `SECRET_KEY`
 
-### Option 2 — Manual template
+### Option 2 — Template URL
+1. In Unraid → **Docker** → **Add Container**
+2. At the very top of the page, find the **"Template URL"** field
+3. Paste the URL below and click the arrow button next to it:
+https://raw.githubusercontent.com/MisterK-Qc/plexharvester/main/unraid-template/plexharvester.xml
 
-1. In Unraid, go to **Docker > Add Container**
-2. Paste the following template URL in the **Template URL** field:
-   ```
-   https://raw.githubusercontent.com/MisterK-Qc/plexharvester/main/unraid-template/plexharvester.xml
-   ```
-3. Fill in the required fields and click **Apply**
 
----
+4. All fields pre-fill automatically — enter your `SECRET_KEY` and click **Apply**
 
-## Environment Variables
+### Option 3 — Via SSH (saves template permanently)
+Run this once in your Unraid terminal:
+```bash
+wget -O /boot/config/plugins/dockerMan/templates-user/plexharvester.xml \
+https://raw.githubusercontent.com/MisterK-Qc/plexharvester/main/unraid-template/plexharvester.xml
+Then: Docker → Add Container → select PlexHarvester under User Templates
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `SECRET_KEY` | **Yes** | — | Flask secret key for session security. Use a long random string. |
-| `TZ` | No | `America/Montreal` | Container timezone |
-| `PLEX_COMPARE_CONFIG_DIR` | No | `/config` | Internal config directory (do not change) |
-
-> **Generate a SECRET_KEY:**
-> ```bash
-> openssl rand -hex 32
-> ```
-
----
-
-## Volumes
-
-| Container path | Description |
-|---|---|
-| `/config` | **Required.** Persistent storage for config, cache, and logs. |
+Environment Variables
+Variable	Required	Default	Description
+SECRET_KEY	Yes	—	Flask secret key for sessions. Generate one: openssl rand -hex 32
+TZ	No	America/Montreal	Container timezone
+PLEX_COMPARE_CONFIG_DIR	No	/config	Internal config path (do not change)
+Volumes
+Container path	Description
+/config	Required. Persistent storage for config, cache, and logs.
 
 ---
 
