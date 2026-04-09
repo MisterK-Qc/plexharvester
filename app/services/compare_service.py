@@ -273,8 +273,7 @@ def _compute_quality_flags(remote, local, comparison_settings):
             res_better = True
         elif rr < lr:
             res_better = False
-        else:
-            res_better = None  # égal
+        # else: None → égal
 
     # ── 2. Codec ─────────────────────────────────────────────────────────────
     rc = codec_rank(r_codec)
@@ -283,43 +282,41 @@ def _compute_quality_flags(remote, local, comparison_settings):
     codec_better = None
     if r_codec and l_codec:
         if rc > lc:
-            codec_better = True   # distant meilleur codec → intéressant
+            codec_better = True
         elif rc < lc:
-            codec_better = False  # local meilleur codec → on skip
-        else:
-            codec_better = None   # égal ou inconnu
-
-    # Si le local a un codec strictement supérieur → skip immédiat
-    # (ex : local AV1 vs distant H265 : peu importe la résolution/bitrate)
-    if codec_better is False:
-        return {
-            "blocked_by_transcode": False,
-            "res_better": res_better,
-            "res_rank_remote": rr,
-            "res_rank_local": lr,
-            "codec_better": codec_better,
-            "bitrate_better": None,
-            "bitrate_pct": None,
-            "include_item": False,
-        }
+            codec_better = False
+        # else: None → égal
 
     # ── 3. Bitrate ───────────────────────────────────────────────────────────
     bitrate_pct = None
     bitrate_better = None
     if use_bitrate and r_bitrate and l_bitrate and l_bitrate > 0:
         bitrate_pct = ((r_bitrate - l_bitrate) / l_bitrate) * 100.0
-        bitrate_better = (bitrate_pct >= min_bitrate_diff_pct)
+        if bitrate_pct >= min_bitrate_diff_pct:
+            bitrate_better = True    # remote significativement meilleur
+        elif bitrate_pct <= -min_bitrate_diff_pct:
+            bitrate_better = False   # local significativement meilleur
+        # else: None → similaire
 
-    # ── Décision finale ──────────────────────────────────────────────────────
-    # Un item est inclus si le distant apporte quelque chose de mieux :
-    # résolution supérieure OU codec supérieur OU (bitrate supérieur si activé).
-    # Le filtre de résolution est appliqué côté client (JS) pour être instantané.
-    has_upgrade = (res_better is True) or (codec_better is True) or (bitrate_better is True)
-
-    if bitrate_better is not None:
-        include_item = bitrate_better
+    # ── Décision finale (hiérarchique : résolution → codec → bitrate) ────────
+    #
+    # Priorité 1 — Résolution
+    if res_better is True:
+        include_item = True   # remote a meilleure résolution → inclure
+    elif res_better is False:
+        include_item = False  # local a meilleure résolution → skip
     else:
-        include_item = has_upgrade if (res_better is not None or codec_better is not None) else True
+        # Résolution égale ou inconnue → Priorité 2 : Codec
+        if codec_better is True:
+            include_item = True   # même rés, remote a meilleur codec → inclure
+        elif codec_better is False:
+            include_item = False  # même rés, local a meilleur codec → skip
+        else:
+            # Codec égal ou inconnu → Priorité 3 : Bitrate
+            if use_bitrate and bitrate_better is not None:
+                include_item = bitrate_better  # remote significativement mieux/pire
+            else:
+                include_item = True  # aucun critère discriminant → inclure par défaut
 
     return {
         "blocked_by_transcode": False,
