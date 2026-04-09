@@ -200,7 +200,7 @@
             {% for service in stream_data["services"] %}<option value="{{ service }}">{{ service }}</option>{% endfor %}
           </select>
           {% if stream_data["items"][0].type == "Série" %}
-          <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer;margin-left:.5rem;white-space:nowrap;">
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer;white-space:nowrap;">
             <input type="checkbox" class="missing-ep-filter"> {{ t("mydashboard.missing_episodes_only") }}
           </label>
           {% endif %}
