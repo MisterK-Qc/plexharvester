@@ -199,6 +199,11 @@
             <option value="">{{ t("mydashboard.all_services") }}</option>
             {% for service in stream_data["services"] %}<option value="{{ service }}">{{ service }}</option>{% endfor %}
           </select>
+          {% if stream_data["items"][0].type == "Série" %}
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer;margin-left:.5rem;white-space:nowrap;">
+            <input type="checkbox" class="missing-ep-filter"> {{ t("mydashboard.missing_episodes_only") }}
+          </label>
+          {% endif %}
         </div>
         <div class="table-scroll">
           <table class="sticky-table">
@@ -312,8 +317,9 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   document.querySelectorAll(".filter-box").forEach(box => {
-    const input = box.querySelector('input');
+    const input = box.querySelector('input[type="search"]');
     const serviceSelect = box.querySelector('.service-filter');
+    const missingCb = box.querySelector('.missing-ep-filter');
     const wrapper = box.nextElementSibling;
     const table = wrapper ? wrapper.querySelector('table') : null;
     const tbody = table ? table.querySelector('tbody') : null;
@@ -323,6 +329,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const applyFilter = () => {
       const textFilter = (input?.value || "").toLowerCase();
       const serviceFilter = serviceSelect?.value || "";
+      const missingOnly = missingCb?.checked || false;
       const headers = [...thead.querySelectorAll("th")];
       const rows = tbody.querySelectorAll("tr");
       let episodesColIndex = -1;
@@ -342,7 +349,11 @@ document.addEventListener("DOMContentLoaded", function () {
         const matchTitle = (cells[0]?.textContent || "").toLowerCase().includes(textFilter);
         let matchService = true;
         if (serviceFilter && serviceColIndex !== -1) matchService = (cells[serviceColIndex]?.textContent || "").trim().includes("✅");
-        row.style.display = (matchTitle && matchService) ? "" : "none";
+        let matchMissing = true;
+        if (missingOnly && episodesColIndex !== -1) {
+          matchMissing = !!(cells[episodesColIndex]?.querySelector('.episodes-missing'));
+        }
+        row.style.display = (matchTitle && matchService && matchMissing) ? "" : "none";
       });
       if (wrapper) wrapper.scrollLeft = 0;
 
@@ -351,7 +362,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const libId = box.dataset.libId;
         const total = parseInt(box.dataset.total || '0');
         const visible = [...rows].filter(r => r.style.display !== 'none').length;
-        const isActive = textFilter !== '' || serviceFilter !== '';
+        const isActive = textFilter !== '' || serviceFilter !== '' || missingOnly;
         const fi = document.getElementById(`my-fi-${libId}`);
         if (fi) fi.textContent = isActive ? `${visible} résultat${visible !== 1 ? 's' : ''} sur ${total}` : '';
         const tcSpan = document.getElementById(`my-tc-${libId}`);
@@ -361,6 +372,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (input) input.addEventListener("input", applyFilter);
     if (serviceSelect) serviceSelect.addEventListener("change", applyFilter);
+    if (missingCb) missingCb.addEventListener("change", applyFilter);
   });
 
   document.querySelectorAll('.collapsible-header').forEach(header => {
