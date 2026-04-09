@@ -78,30 +78,35 @@
       }
       if (!table) return;
 
-      // Appliquer le filtre résolution remote vs local immédiatement si présent
-      if (resModeSelect) applyResFilter(table, resModeSelect.value);
-
       const run = () => {
-        const q   = (input     ? input.value     : "").toLowerCase();
-        const res = (resSelect  ? resSelect.value : "").toLowerCase();
+        const q       = (input        ? input.value        : "").toLowerCase();
+        const res     = (resSelect    ? resSelect.value    : "").toLowerCase();
+        const modeVal = (resModeSelect ? resModeSelect.value : "none");
 
         table.querySelectorAll("tbody tr").forEach(row => {
           if (row.classList.contains('episode-details')) return;
-          const txt  = row.textContent.toLowerCase();
+          const txt   = row.textContent.toLowerCase();
           const rText = row.querySelector(".res-cell")?.textContent.toLowerCase() || "";
-          const passText = txt.includes(q);
+          const passText      = txt.includes(q);
           const passResSelect = res ? rText.includes(res) : true;
+
           if (!row.classList.contains('compare-row')) {
             row.style.display = (passText && passResSelect) ? "" : "none";
           } else {
-            // Les compare-rows sont gérées par applyResFilter pour le mode remote vs local
-            // On applique quand même le filtre texte + résolution affichée
-            if (!passText || !passResSelect) row.style.display = "none";
-            // (applyResFilter peut remettre display à "" — on ne touche pas ici)
+            // Pour les compare-rows : combiner texte + résolution affichée + mode remote/local
+            let passMode = true;
+            if (modeVal === 'equal_or_higher') {
+              const rr = parseInt(row.dataset.resRemote || '0', 10);
+              const lr = parseInt(row.dataset.resLocal  || '0', 10);
+              passMode = (rr >= lr);
+            } else if (modeVal === 'higher_only') {
+              const rr = parseInt(row.dataset.resRemote || '0', 10);
+              const lr = parseInt(row.dataset.resLocal  || '0', 10);
+              passMode = (rr > lr);
+            }
+            row.style.display = (passText && passResSelect && passMode) ? "" : "none";
           }
         });
-
-        if (resModeSelect) applyResFilter(table, resModeSelect.value);
 
         // Mettre à jour les compteurs filtrés
         const libId = box.dataset.libId;
