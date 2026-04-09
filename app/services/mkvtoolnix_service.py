@@ -60,6 +60,44 @@ def register_mkv_languages(new_codes: list) -> None:
 
 VIDEO_EXTS = (".mkv", ".mp4", ".avi", ".mov", ".mpeg")
 
+# StreamFab service name → scene abbreviation (most specific patterns first)
+_SERVICE_TAG_MAP = [
+    (re.compile(r'(?i)Amazon[.\s]?Prime[.\s]?Video'), 'AMZN'),
+    (re.compile(r'(?i)Amazon[.\s]?Prime'),            'AMZN'),
+    (re.compile(r'(?i)Prime[.\s]?Video'),              'AMZN'),
+    (re.compile(r'(?i)(?<!\w)Amazon(?!\w)'),           'AMZN'),
+    (re.compile(r'(?i)(?<!\w)Netflix(?!\w)'),          'NF'),
+    (re.compile(r'(?i)Disney\+'),                      'DSNP'),
+    (re.compile(r'(?i)Disney[.\s]?Plus'),              'DSNP'),
+    (re.compile(r'(?i)HBO[.\s]?Max'),                  'HMAX'),
+    (re.compile(r'(?i)(?<!\w)HBO(?!\w)'),              'HMAX'),
+    (re.compile(r'(?i)Apple[.\s]?TV\+'),               'ATVP'),
+    (re.compile(r'(?i)Apple[.\s]?TV'),                 'ATVP'),
+    (re.compile(r'(?i)(?<!\w)Hulu(?!\w)'),             'HULU'),
+    (re.compile(r'(?i)Paramount\+'),                   'PMTP'),
+    (re.compile(r'(?i)Paramount[.\s]?Plus'),           'PMTP'),
+    (re.compile(r'(?i)(?<!\w)Peacock(?!\w)'),          'PCOK'),
+    (re.compile(r'(?i)(?<!\w)Crave(?!\w)'),            'CRAV'),
+    (re.compile(r'(?i)Club[.\s]?Illico'),              'ILCO'),
+    (re.compile(r'(?i)(?<!\w)Illico(?!\w)'),           'ILCO'),
+    (re.compile(r'(?i)(?<!\w)Tubi(?!\w)'),             'TUBI'),
+    (re.compile(r'(?i)(?<!\w)Mubi(?!\w)'),             'MUBI'),
+    (re.compile(r'(?i)(?<!\w)Crunchyroll(?!\w)'),      'CR'),
+    (re.compile(r'(?i)(?<!\w)Funimation(?!\w)'),       'FUNI'),
+    (re.compile(r'(?i)(?<!\w)Showtime(?!\w)'),         'SHO'),
+    (re.compile(r'(?i)(?<!\w)Starz(?!\w)'),            'STRZ'),
+    (re.compile(r'(?i)(?<!\w)Noovo(?!\w)'),            'NOOVO'),
+    (re.compile(r'(?i)Tou[.\s]?TV'),                   'TOUTV'),
+]
+
+
+def normalize_service_tag(name: str) -> str:
+    """Replace verbose streaming service names with scene abbreviations in a filename stem."""
+    for pattern, tag in _SERVICE_TAG_MAP:
+        name = pattern.sub(tag, name)
+    return name
+
+
 class MKVCancelledError(Exception):
     pass
 
@@ -343,7 +381,9 @@ def build_destination_path(
     is_series_category: bool,
     forced_series_name: str = "",
 ) -> str:
-    filename = os.path.basename(src_file)
+    raw_filename = os.path.basename(src_file)
+    stem, ext = os.path.splitext(raw_filename)
+    filename = normalize_service_tag(stem) + ext
 
     if not is_series_category:
         return os.path.join(dst_dir, to_safe_filename(filename))
