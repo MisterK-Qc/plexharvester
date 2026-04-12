@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t("playlist.page_title") }}{% endblock %}
+{% block body_class %}page-playlists{% endblock %}
+
+{% block head %}
+<style>
+  .pl-form-card {
+    background: var(--bg-elev-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    max-width: 680px;
+    margin: 1.5rem 0;
+  }
+  .pl-form-card > * + * { margin-top: .85rem; }
+  .pl-form-row { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+  .pl-form-row > div { flex: 1 1 200px; }
+  .pl-form-row label { display: block; margin-bottom: .25rem; font-size: .85rem; color: var(--muted); }
+  .pl-form-row input { width: 100%; }
+
+  #pl-result { margin-top: 1.5rem; }
+  .pl-stats {
+    display: flex; gap: 1.5rem; flex-wrap: wrap;
+    margin-bottom: 1rem; font-size: .9rem;
+  }
+  .pl-stat { display: flex; flex-direction: column; align-items: center; }
+  .pl-stat-num { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .pl-stat-num.ok   { color: #4caf50; }
+  .pl-stat-num.warn { color: #ffcc66; }
+  .pl-stat-label { font-size: .75rem; color: var(--muted); margin-top: .15rem; }
+
+  .pl-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: .75rem; }
+  .pl-tab {
+    padding: .4rem 1rem; cursor: pointer; font-size: .85rem;
+    border-bottom: 2px solid transparent; color: var(--muted);
+    background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .pl-tab.active { color: var(--accent, #e5a00d); border-bottom-color: var(--accent, #e5a00d); font-weight: 600; }
+
+  .pl-panel { display: none; }
+  .pl-panel.active { display: block; }
+
+  .pl-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .pl-table th { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  .pl-table td { padding: .35rem .6rem; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.06)); vertical-align: top; }
+  .pl-table tr:last-child td { border-bottom: none; }
+  .pl-badge-movie { background: #1565c0; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; }
+  .pl-badge-show  { background: #4a148c; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; }
+  .pl-muted { color: var(--muted); font-style: italic; }
+
+  .pl-spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 2px solid var(--border); border-top-color: var(--accent, #e5a00d);
+    border-radius: 50%; animation: pl-spin .7s linear infinite; vertical-align: middle; margin-right: .4rem;
+  }
+  @keyframes pl-spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<header>
+  <h1>{{ t("playlist.header") }}</h1>
+</header>
+
+<main style="padding: 0 1rem 2rem;">
+
+  <div class="pl-form-card">
+    {% if not trakt_client_id %}
+    <div class="warning-box" style="margin-bottom:.75rem;">
+      {{ t("playlist.no_client_id") }}
+      <a href="{{ url_for('config.config_page') }}">{{ t("playlist.go_config") }}</a>
+    </div>
+    {% endif %}
+
+    <div class="pl-form-row">
+      <div style="flex: 2 1 300px;">
+        <label for="pl-url">{{ t("playlist.trakt_url") }}</label>
+        <input type="url" id="pl-url"
+               placeholder="https://trakt.tv/users/username/lists/my-list"
+               spellcheck="false">
+      </div>
+      <div>
+        <label for="pl-name">{{ t("playlist.playlist_name") }}</label>
+        <input type="text" id="pl-name"
+               placeholder="{{ t('playlist.name_placeholder') }}"
+               spellcheck="false">
+      </div>
+    </div>
+
+    {% if not trakt_client_id %}
+    <div>
+      <label for="pl-client-id">{{ t("playlist.client_id_override") }}</label>
+      <input type="text" id="pl-client-id" placeholder="{{ t('playlist.client_id_placeholder') }}" spellcheck="false">
+    </div>
+    {% else %}
+    <input type="hidden" id="pl-client-id" value="">
+    {% endif %}
+
+    <div style="margin-top: .5rem;">
+      <button class="button-primary" id="pl-import-btn" {% if not trakt_client_id %}disabled{% endif %}>
+        {{ t("playlist.import_btn") }}
+      </button>
+      <span id="pl-status" style="margin-left:.75rem; font-size:.85rem;"></span>
+    </div>
+  </div>
+
+  <div id="pl-result" style="display:none;"></div>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const btn      = document.getElementById('pl-import-btn');
+  const urlInput = document.getElementById('pl-url');
+  const nameInput = document.getElementById('pl-name');
+  const cidInput = document.getElementById('pl-client-id');
+  const statusEl = document.getElementById('pl-status');
+  const resultEl = document.getElementById('pl-result');
+
+  // Enable the button once a Client ID is typed (if initially disabled)
+  if (cidInput) {
+    cidInput.addEventListener('input', () => {
+      btn.disabled = !cidInput.value.trim();
+    });
+  }
+
+  btn.addEventListener('click', () => {
+    const trakt_url    = urlInput.value.trim();
+    const playlist_name = nameInput.value.trim();
+    const client_id    = (cidInput ? cidInput.value.trim() : '');
+
+    if (!trakt_url) {
+      statusEl.textContent = '{{ t("playlist.error_no_url") }}';
+      return;
+    }
+
+    btn.disabled  = true;
+    resultEl.style.display = 'none';
+    statusEl.innerHTML = '<span class="pl-spinner"></span>{{ t("playlist.importing") }}';
+
+    fetch('/playlists/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trakt_url, playlist_name, client_id }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        if (!data.ok) {
+          statusEl.textContent = '';
+          showError(data.error || '{{ t("playlist.error_generic") }}');
+          return;
+        }
+        statusEl.textContent = '';
+        showResult(data);
+      })
+      .catch(err => {
+        btn.disabled = false;
+        statusEl.textContent = '';
+        showError(String(err));
+      });
+  });
+
+  function showError(msg) {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div class="error-box">${escHtml(msg)}</div>`;
+  }
+
+  function showResult(data) {
+    const matchedHtml   = buildTable(data.matched_items,   true);
+    const unmatchedHtml = buildTable(data.unmatched_items, false);
+
+    resultEl.innerHTML = `
+      <div class="pl-stats">
+        <div class="pl-stat">
+          <span class="pl-stat-num">${data.total}</span>
+          <span class="pl-stat-label">{{ t("playlist.stat_total") }}</span>
+        </div>
+        <div class="pl-stat">
+          <span class="pl-stat-num ok">${data.matched}</span>
+          <span class="pl-stat-label">{{ t("playlist.stat_matched") }}</span>
+        </div>
+        <div class="pl-stat">
+          <span class="pl-stat-num ${data.unmatched > 0 ? 'warn' : ''}">${data.unmatched}</span>
+          <span class="pl-stat-label">{{ t("playlist.stat_unmatched") }}</span>
+        </div>
+      </div>
+      <div style="margin-bottom:.5rem; font-size:.85rem;">
+        {{ t("playlist.playlist_created") }} <strong>${escHtml(data.playlist_name)}</strong>
+      </div>
+      <div class="pl-tabs">
+        <button class="pl-tab active" data-panel="matched">
+          {{ t("playlist.tab_matched") }} (${data.matched})
+        </button>
+        <button class="pl-tab" data-panel="unmatched">
+          {{ t("playlist.tab_unmatched") }} (${data.unmatched})
+        </button>
+      </div>
+      <div class="pl-panel active" id="pl-panel-matched">${matchedHtml}</div>
+      <div class="pl-panel"        id="pl-panel-unmatched">${unmatchedHtml}</div>
+    `;
+
+    resultEl.style.display = 'block';
+    bindTabs();
+  }
+
+  function buildTable(items, isMatched) {
+    if (!items || !items.length) {
+      return `<p class="pl-muted">{{ t("playlist.no_items") }}</p>`;
+    }
+    const rows = items.map(item => {
+      const badge = item.type === 'movie'
+        ? '<span class="pl-badge-movie">Film</span>'
+        : '<span class="pl-badge-show">Série</span>';
+      const year = item.year ? ` (${item.year})` : '';
+      if (isMatched) {
+        return `<tr>
+          <td>${badge}</td>
+          <td>${escHtml(item.title)}${escHtml(year)}</td>
+          <td class="pl-muted">${escHtml(item.plex_title || '')}</td>
+        </tr>`;
+      } else {
+        const tmdb = item.tmdb_id
+          ? `<a href="https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}" target="_blank" rel="noopener" style="font-size:.75rem;">TMDB</a>`
+          : '';
+        return `<tr>
+          <td>${badge}</td>
+          <td>${escHtml(item.title)}${escHtml(year)}</td>
+          <td>${tmdb}</td>
+        </tr>`;
+      }
+    }).join('');
+
+    if (isMatched) {
+      return `<table class="pl-table">
+        <thead><tr>
+          <th>{{ t("playlist.col_type") }}</th>
+          <th>{{ t("playlist.col_trakt") }}</th>
+          <th>{{ t("playlist.col_plex") }}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    } else {
+      return `<table class="pl-table">
+        <thead><tr>
+          <th>{{ t("playlist.col_type") }}</th>
+          <th>{{ t("playlist.col_trakt") }}</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+  }
+
+  function bindTabs() {
+    document.querySelectorAll('.pl-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.pl-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.pl-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        const panel = document.getElementById('pl-panel-' + tab.dataset.panel);
+        if (panel) panel.classList.add('active');
+      });
+    });
+  }
+
+  function escHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+})();
+</script>
+{% endblock %}

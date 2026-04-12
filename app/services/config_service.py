@@ -7,6 +7,7 @@ from app.config_paths import CONFIG_FILE
 DEFAULT_CONFIG = {
     "FTP_SERVERS": [],          # Liste des serveurs FTP configurés
     "TMDB_API_KEY": "",
+    "TRAKT_CLIENT_ID": "",
     "REFRESH_DELAY_DAYS": 30,
     "REFRESH_TIME": "03:00",
 
@@ -105,7 +106,8 @@ def normalize_config(raw: dict | None) -> dict:
     cfg = deepcopy(DEFAULT_CONFIG)
     raw = raw or {}
 
-    cfg["TMDB_API_KEY"] = str(raw.get("TMDB_API_KEY", cfg["TMDB_API_KEY"]) or "")
+    cfg["TMDB_API_KEY"]      = str(raw.get("TMDB_API_KEY",      cfg["TMDB_API_KEY"])      or "")
+    cfg["TRAKT_CLIENT_ID"]   = str(raw.get("TRAKT_CLIENT_ID",   cfg["TRAKT_CLIENT_ID"])   or "")
     cfg["REFRESH_DELAY_DAYS"] = _safe_int(raw.get("REFRESH_DELAY_DAYS"), cfg["REFRESH_DELAY_DAYS"])
     cfg["REFRESH_TIME"] = str(raw.get("REFRESH_TIME", cfg["REFRESH_TIME"]) or "03:00")
     cfg["LOG_RETENTION_DAYS"] = _safe_int(raw.get("LOG_RETENTION_DAYS"), 7)
@@ -270,7 +272,8 @@ def build_config_from_form(form) -> dict:
             _ftp_servers = []
 
     return normalize_config({
-        "TMDB_API_KEY": form.get("tmdb_api_key", ""),
+        "TMDB_API_KEY":    form.get("tmdb_api_key", ""),
+        "TRAKT_CLIENT_ID": form.get("trakt_client_id", ""),
         "REFRESH_DELAY_DAYS": form.get("refresh_delay_days", 30),
         "REFRESH_TIME": form.get("refresh_time", "03:00"),
         "LOG_RETENTION_DAYS": form.get("log_retention_days", 7),

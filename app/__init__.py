@@ -2,6 +2,7 @@ import base64
 import logging
 import os
 import re
+import secrets
 from logging.handlers import TimedRotatingFileHandler
 
 from flask import Flask, render_template, session
@@ -14,11 +15,29 @@ from .routes.ftp_routes import ftp_bp
 from .config_paths import LOG_DIR
 
 
+def _resolve_secret_key() -> str:
+    key = os.environ.get("SECRET_KEY", "").strip()
+    if key:
+        return key
+    config_dir = os.environ.get("PLEX_COMPARE_CONFIG_DIR", "/config")
+    key_file = os.path.join(config_dir, "secret_key.txt")
+    if os.path.exists(key_file):
+        try:
+            stored = open(key_file).read().strip()
+            if stored:
+                return stored
+        except Exception:
+            pass
+    key = secrets.token_hex(32)
+    os.makedirs(config_dir, exist_ok=True)
+    with open(key_file, "w") as f:
+        f.write(key)
+    return key
+
+
 def create_app():
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or app.config.get("SECRET_KEY")
-    if not app.config["SECRET_KEY"]:
-        raise RuntimeError("SECRET_KEY non définie — configure-la dans ton .env")
+    app.config["SECRET_KEY"] = _resolve_secret_key()
 
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -161,7 +180,7 @@ def create_app():
     # ------------------------------------------------------------------
     # Blueprints
     # ------------------------------------------------------------------
-    from .routes import auth_bp, config_bp, dashboard_bp, my_dashboard_bp, mkv_bp, snapshot_bp
+    from .routes import auth_bp, config_bp, dashboard_bp, my_dashboard_bp, mkv_bp, snapshot_bp, playlist_bp
     from .routes.mkv_routes import setup_auto_mkv_hook
 
     app.register_blueprint(auth_bp)
@@ -171,6 +190,7 @@ def create_app():
     app.register_blueprint(mkv_bp)
     app.register_blueprint(ftp_bp)
     app.register_blueprint(snapshot_bp)
+    app.register_blueprint(playlist_bp)
 
     # ------------------------------------------------------------------
     # Error handlers

@@ -110,6 +110,12 @@
                  value="{{ config.get('TMDB_API_KEY','') }}"
                  placeholder="{{ t('config.tmdb_key_placeholder') }}" spellcheck="false">
         </div>
+        <div>
+          <label for="trakt_client_id">{{ t("config.trakt_key") }}</label>
+          <input type="text" id="trakt_client_id" name="trakt_client_id"
+                 value="{{ config.get('TRAKT_CLIENT_ID','') }}"
+                 placeholder="{{ t('config.trakt_key_placeholder') }}" spellcheck="false">
+        </div>
         <div class="row-inline">
           <div style="flex:1">
             <label for="refresh_delay_days">{{ t("config.cache") }}</label>

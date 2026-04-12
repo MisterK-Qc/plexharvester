@@ -29,6 +29,10 @@
      class="main-nav-tab {% if ep == 'snapshot.snapshots_page' %}active{% endif %}">
     {{ t("nav.snapshots") }}
   </a>
+  <a href="{{ url_for('playlist.playlists_page') }}"
+     class="main-nav-tab {% if ep == 'playlist.playlists_page' %}active{% endif %}">
+    {{ t("nav.playlists") }}
+  </a>
   <a href="{{ url_for('config.config_page') }}"
      class="main-nav-tab {% if ep == 'config.config_page' %}active{% endif %}">
     {{ t("nav.config") }}
