@@ -49,7 +49,9 @@ def _build_plex_indexes(plex):
         if section.type not in ("movie", "show"):
             continue
         try:
-            items = section.all()
+            # includeGuids=1 : Plex inclut les GUIDs externes (TMDB, IMDB…) dans la
+            # réponse bulk — évite N+1 requêtes individuelles par item.
+            items = section.all(includeGuids=1)
         except Exception as exc:
             logger.warning("[PLAYLIST] Erreur chargement biblio '%s': %s", section.title, exc)
             continue
