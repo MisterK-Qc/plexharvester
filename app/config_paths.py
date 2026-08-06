@@ -6,6 +6,7 @@ LOG_DIR = os.path.join(CONFIG_DIR, "logs")
 CACHE_DIR = os.path.join(CONFIG_DIR, "cache")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 MKV_LANGUAGES_FILE = os.path.join(CONFIG_DIR, "mkv_languages.json")
+PLAYLISTS_STORE_FILE = os.path.join(CONFIG_DIR, "playlists_store.json")
 
 # Création automatique des dossiers
 os.makedirs(LOG_DIR, exist_ok=True)

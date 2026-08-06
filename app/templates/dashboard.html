@@ -247,6 +247,7 @@
   _pollFtpStatus();
 </script>
 <script>
+const FTP_DL_LABEL = {{ t("dashboard.btn_ftp_download") | tojson }};
 function resetFtpButton(button) {
   button.dataset.jobId = "";
   button.dataset.status = "idle";
@@ -294,7 +295,14 @@ async function queueFtpDownload(button) {
   try {
     const response = await fetch("/ftp/queue_download", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ media_key: button.dataset.mediaKey || "", remote_path: button.dataset.remotePath || "", filename: button.dataset.filename || "", media_type: button.dataset.mediaType || "movie", ftp_id: button.dataset.ftpId || "" })
+      body: JSON.stringify({
+        media_key: button.dataset.mediaKey || "", remote_path: button.dataset.remotePath || "",
+        filename: button.dataset.filename || "", media_type: button.dataset.mediaType || "movie",
+        ftp_id: button.dataset.ftpId || "",
+        season: button.dataset.season ? parseInt(button.dataset.season, 10) : null,
+        episode: button.dataset.episode ? parseInt(button.dataset.episode, 10) : null,
+        series_title: button.dataset.seriesTitle || "",
+      })
     });
     const data = await response.json();
     if (!data.success) { resetFtpButton(button); return; }
@@ -320,8 +328,97 @@ async function cancelFtpDownload(button) {
     await refreshFtpButtonStatus(button);
   } catch (err) { console.error(err); await refreshFtpButtonStatus(button); }
 }
+function resetFtpBatchButton(button) {
+  let total = 0;
+  try { total = JSON.parse(button.dataset.episodes || "[]").length; } catch (e) {}
+  button.dataset.jobIds = "[]";
+  button.dataset.status = "idle";
+  button.textContent = `${FTP_DL_LABEL} (${total})`;
+  button.disabled = false;
+  button.classList.remove("is-queued", "is-downloading");
+}
+async function queueFtpDownloadBatch(button) {
+  let episodes = [];
+  try { episodes = JSON.parse(button.dataset.episodes || "[]"); } catch (e) {}
+  if (!episodes.length) return;
+  button.disabled = true; button.textContent = "Ajout à la file...";
+  try {
+    const response = await fetch("/ftp/queue_download_batch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ episodes })
+    });
+    const data = await response.json();
+    if (!data.success || !(data.job_ids || []).length) { resetFtpBatchButton(button); return; }
+    button.dataset.jobIds = JSON.stringify(data.job_ids);
+    button.dataset.status = "queued";
+    button.classList.add("is-queued"); button.classList.remove("is-downloading");
+    await refreshFtpBatchButtonStatus(button);
+  } catch (err) { console.error(err); resetFtpBatchButton(button); }
+}
+async function refreshFtpBatchButtonStatus(button) {
+  let jobIds = [];
+  try { jobIds = JSON.parse(button.dataset.jobIds || "[]"); } catch (e) {}
+  if (!jobIds.length) return;
+  try {
+    const response = await fetch("/ftp/download_status_batch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: jobIds })
+    });
+    const data = await response.json();
+    if (!data.success) return;
+    const statuses = data.statuses || [];
+    const total = statuses.length;
+    let done = 0, error = 0, downloading = 0, queued = 0, other = 0, curPct = 0;
+    statuses.forEach(s => {
+      if (s.status === "done") done++;
+      else if (s.status === "error") error++;
+      else if (s.status === "downloading") { downloading++; curPct = s.progress || 0; }
+      else if (s.status === "queued") queued++;
+      else other++;
+    });
+    button.disabled = false;
+    if (downloading > 0) {
+      button.dataset.status = "downloading";
+      button.textContent = `Téléchargement... ${done}/${total} (${curPct}%)`;
+      button.disabled = true;
+      button.classList.add("is-downloading"); button.classList.remove("is-queued");
+      return;
+    }
+    if (queued > 0) {
+      button.dataset.status = "queued";
+      button.textContent = `En file (${done}/${total})`;
+      button.classList.add("is-queued"); button.classList.remove("is-downloading");
+      return;
+    }
+    // Plus rien en file ni en cours : tout est terminé, en erreur ou annulé
+    if (done === 0 && error === 0) { resetFtpBatchButton(button); return; }
+    button.dataset.status = "done";
+    button.disabled = true;
+    button.textContent = error > 0 ? `Terminé (${done}/${total}, ${error} erreur(s))` : `Téléchargé (${done}/${total})`;
+    button.classList.remove("is-queued", "is-downloading");
+  } catch (err) { console.error(err); }
+}
+async function cancelFtpDownloadBatch(button) {
+  let jobIds = [];
+  try { jobIds = JSON.parse(button.dataset.jobIds || "[]"); } catch (e) {}
+  if (!jobIds.length) return;
+  button.disabled = true; button.textContent = "Retrait...";
+  try {
+    await fetch("/ftp/cancel_download_batch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job_ids: jobIds })
+    });
+    await refreshFtpBatchButtonStatus(button);
+  } catch (err) { console.error(err); await refreshFtpBatchButtonStatus(button); }
+}
 async function handleFtpDownloadClick(button) {
   const status = button.dataset.status || "idle";
+  if (button.dataset.batch === "1") {
+    if (status === "queued") { await cancelFtpDownloadBatch(button); return; }
+    if (status === "downloading" || status === "done") return;
+    await queueFtpDownloadBatch(button);
+    return;
+  }
   if (status === "queued") { await cancelFtpDownload(button); return; }
   if (status === "downloading" || status === "done") return;
   await queueFtpDownload(button);
@@ -330,7 +427,9 @@ document.addEventListener("DOMContentLoaded", function () {
   setInterval(() => {
     document.querySelectorAll(".btn-ftp-download").forEach((button) => {
       const status = button.dataset.status || "idle";
-      if (status === "queued" || status === "downloading") refreshFtpButtonStatus(button);
+      if (status !== "queued" && status !== "downloading") return;
+      if (button.dataset.batch === "1") refreshFtpBatchButtonStatus(button);
+      else refreshFtpButtonStatus(button);
     });
   }, 2000);
 });
@@ -533,8 +632,12 @@ async function ignoreItem(title, type, btn) {
                   {% set ftp_path = ftp_item.get('path') if ftp_item else None %}
                   {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('remote_path') %}{% endif %}
                   {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('full_path') %}{% endif %}
+                  {% set ftp_batch = item.get('ftp_batch') if item.type == 'show' else None %}
                   <td class="confidence-cell">
-                    {% if ftp_item and ftp_path %}
+                    {% if ftp_batch %}
+                      <span class="confidence-badge confidence-high"
+                            title="{{ t('dashboard.confidence_title') }}">{{ ftp_batch|length }}/{{ item.episode_count }}</span>
+                    {% elif ftp_item and ftp_path %}
                       {% if confidence is not none %}
                         <span class="confidence-badge {% if confidence >= 80 %}confidence-high{% elif confidence >= 60 %}confidence-medium{% else %}confidence-low{% endif %}"
                               title="{{ t('dashboard.confidence_title') }}">{{ confidence }}%</span>
@@ -544,7 +647,15 @@ async function ignoreItem(title, type, btn) {
                   <td class="action-cell">
                     <div class="action-cell-inner">
                       <div class="ftp-action-group">
-                        {% if ftp_item and ftp_path %}
+                        {% if ftp_batch %}
+                          <button class="btn btn-sm btn-ftp-download"
+                            data-batch="1"
+                            data-episodes='{{ ftp_batch | tojson }}'
+                            data-media-key="show:{{ item.title | e }}"
+                            data-job-ids="[]" data-status="idle"
+                            title="{{ ftp_batch|length }} épisode(s) trouvé(s) sur {{ item.episode_count }}"
+                            onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }} ({{ ftp_batch|length }})</button>
+                        {% elif ftp_item and ftp_path %}
                           <button type="button" class="queue-move-btn" onclick="moveUp('{{ job_id }}')" title="Monter dans la file">▲</button>
                           <button class="btn btn-sm btn-ftp-download"
                             data-media-key="{{ item.media_key or ftp_path }}"
@@ -728,6 +839,9 @@ async function ignoreItem(title, type, btn) {
                                       data-filename="{{ ftp_item.get('name') or ep.filename or ep.title }}"
                                       data-media-type="{{ ep.type or 'episode' }}"
                                       data-ftp-id="{{ ftp_item.get('ftp_id', '') }}"
+                                      data-season="{{ ep.season if ep.season is not none else '' }}"
+                                      data-episode="{{ ep.episode if ep.episode is not none else '' }}"
+                                      data-series-title="{{ item.title | e }}"
                                       data-job-id="" data-status="idle"
                                       title="{{ ftp_path }}"
                                       onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }}</button>

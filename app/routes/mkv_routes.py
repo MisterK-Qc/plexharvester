@@ -126,7 +126,12 @@ def _find_best_plex_match(server, guessed_title: str, guessed_year: Optional[int
                 continue
 
             try:
-                candidates = section.search(title=guessed_title)
+                if guessed_year:
+                    candidates = section.search(title=guessed_title, year=guessed_year)
+                    if not candidates:
+                        candidates = section.search(title=guessed_title)
+                else:
+                    candidates = section.search(title=guessed_title)
             except Exception:
                 continue
 

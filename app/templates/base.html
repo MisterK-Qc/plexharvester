@@ -33,6 +33,10 @@
      class="main-nav-tab {% if ep == 'playlist.playlists_page' %}active{% endif %}">
     {{ t("nav.playlists") }}
   </a>
+  <a href="{{ url_for('tools.tools_page') }}"
+     class="main-nav-tab {% if ep == 'tools.tools_page' %}active{% endif %}">
+    Outils
+  </a>
   <a href="{{ url_for('config.config_page') }}"
      class="main-nav-tab {% if ep == 'config.config_page' %}active{% endif %}">
     {{ t("nav.config") }}

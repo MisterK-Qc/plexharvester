@@ -33,6 +33,18 @@ def config_page():
     plex_remote_servers = []
 
     plex_token = session.get("plex_token")
+
+    # Sauvegarder le token pour le scheduler dès qu'on est sur la page config (session dispo)
+    if plex_token:
+        try:
+            from ..services.config_service import load_config as _load_cfg, update_config_key
+            _existing = _load_cfg()
+            if _existing.get("PLEX_TOKEN_SCHEDULER") != plex_token:
+                update_config_key("PLEX_TOKEN_SCHEDULER", plex_token)
+                current_app.config["PLEX_TOKEN_SCHEDULER"] = plex_token
+        except Exception:
+            current_app.logger.exception("[CONFIG] Erreur sauvegarde PLEX_TOKEN_SCHEDULER")
+
     if plex_token:
         try:
             account = MyPlexAccount(token=plex_token)
@@ -58,6 +70,10 @@ def config_page():
     if request.method == "POST":
         try:
             cfg = build_config_from_form(request.form)
+            # Préserver le token scheduler (non présent dans le form, géré au login)
+            from ..services.config_service import load_config as _load_cfg
+            existing = _load_cfg()
+            cfg["PLEX_TOKEN_SCHEDULER"] = existing.get("PLEX_TOKEN_SCHEDULER", "")
             cfg = save_config(cfg)
             current_app.config.update(cfg)
             _i18n_module._cache.clear()

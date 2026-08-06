@@ -56,6 +56,11 @@ DEFAULT_CONFIG = {
     "LOG_RETENTION_DAYS": 7,
 
     "FTP_TITLE_ALIASES": {},
+
+    "PLAYLIST_AUTO_SYNC":      False,
+    "PLAYLIST_AUTO_SYNC_TIME": "00:00",
+    "PLAYLIST_AUTO_PUSH_SYNC": False,
+    "PLEX_TOKEN_SCHEDULER":    "",
 }
 
 
@@ -227,6 +232,11 @@ def normalize_config(raw: dict | None) -> dict:
     aliases = raw.get("FTP_TITLE_ALIASES", {})
     cfg["FTP_TITLE_ALIASES"] = aliases if isinstance(aliases, dict) else {}
 
+    cfg["PLAYLIST_AUTO_SYNC"]      = _safe_bool(raw.get("PLAYLIST_AUTO_SYNC"), False)
+    cfg["PLAYLIST_AUTO_SYNC_TIME"] = str(raw.get("PLAYLIST_AUTO_SYNC_TIME", "00:00") or "00:00")
+    cfg["PLAYLIST_AUTO_PUSH_SYNC"] = _safe_bool(raw.get("PLAYLIST_AUTO_PUSH_SYNC"), False)
+    cfg["PLEX_TOKEN_SCHEDULER"]    = str(raw.get("PLEX_TOKEN_SCHEDULER", "") or "")
+
     return cfg
 
 
@@ -256,6 +266,19 @@ def save_config(cfg: dict) -> dict:
         json.dump(normalized, f, indent=2, ensure_ascii=False)
 
     return normalized
+
+
+def update_config_key(key: str, value) -> None:
+    """Met à jour une seule clé dans config.json sans reconstruire toute la config."""
+    path = get_config_path()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except Exception:
+        raw = {}
+    raw[key] = value
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(raw, f, indent=2, ensure_ascii=False)
 
 
 def build_config_from_form(form) -> dict:
@@ -347,4 +370,10 @@ def build_config_from_form(form) -> dict:
             )
             if k.strip() and v.strip()
         },
+
+        "PLAYLIST_AUTO_SYNC":      "playlist_auto_sync" in form,
+        "PLAYLIST_AUTO_SYNC_TIME": form.get("playlist_auto_sync_time", "00:00"),
+        "PLAYLIST_AUTO_PUSH_SYNC": "playlist_auto_push_sync" in form,
+        # PLEX_TOKEN_SCHEDULER est géré séparément (auto-sauvegarde au login)
+        # On le préserve depuis la config existante via update_config_key
     })

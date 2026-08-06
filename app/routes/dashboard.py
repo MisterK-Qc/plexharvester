@@ -369,12 +369,32 @@ def _compute_dashboard_bg(app_obj, cache_key, plex_token, selected_server_name,
 
                             first_ftp_ep = ftp_candidates[0] if ftp_candidates else None
 
+                            ftp_batch = []
+                            for ep_copy in enriched_eps:
+                                ftp_ep = ep_copy.get("ftp_item")
+                                if not ftp_ep:
+                                    continue
+                                ep_path = ftp_ep.get("path") or ftp_ep.get("remote_path") or ftp_ep.get("full_path")
+                                if not ep_path:
+                                    continue
+                                ftp_batch.append({
+                                    "remote_path": ep_path,
+                                    "filename": ftp_ep.get("name") or os.path.basename(ep_path),
+                                    "media_type": "episode",
+                                    "ftp_id": ftp_ep.get("ftp_id", ""),
+                                    "media_key": ep_path,
+                                    "season": ep_copy.get("season"),
+                                    "episode": ep_copy.get("episode"),
+                                    "series_title": show_title,
+                                })
+
                             enriched_missing["episodes"] = enriched_eps
                             enriched_missing["ftp_available"] = bool(first_ftp_ep)
                             enriched_missing["ftp_item"] = first_ftp_ep
                             enriched_missing["ftp_confidence"] = 95 if first_ftp_ep else None
                             enriched_missing["ftp_variant_type"] = "episode_match" if first_ftp_ep else None
                             enriched_missing["sources"] = ["ftp"] if first_ftp_ep else []
+                            enriched_missing["ftp_batch"] = ftp_batch
 
                         else:
                             enriched_missing["ftp_available"] = False

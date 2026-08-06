@@ -9,6 +9,9 @@ cache/
 # MKV languages personnalisés (généré automatiquement)
 mkv_languages.json
 
+# Store de playlists (données personnelles générées à l'exécution)
+playlists_store.json
+
 # Python
 __pycache__/
 *.py[cod]

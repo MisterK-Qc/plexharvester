@@ -3,6 +3,7 @@ from plexapi.myplex import MyPlexAccount
 from plexapi.exceptions import Unauthorized, BadRequest
 from requests.exceptions import HTTPError
 from ..services.plex_service import connect_to_server
+from ..services.config_service import update_config_key
 import time
 
 auth_bp = Blueprint("auth", __name__)
@@ -101,6 +102,12 @@ def login():
                 _set_cached_servers(servers)
             except Exception:
                 # Pas bloquant pour le login
+                pass
+
+            # Sauvegarder le token pour le scheduler de playlists (pas de session disponible en background)
+            try:
+                update_config_key("PLEX_TOKEN_SCHEDULER", plex_token)
+            except Exception:
                 pass
 
             return redirect(url_for("auth.select_server"))

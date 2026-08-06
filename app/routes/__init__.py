@@ -5,3 +5,4 @@ from .my_dashboard import my_dashboard_bp
 from .mkv_routes import mkv_bp
 from .snapshot_routes import snapshot_bp
 from .playlist_routes import playlist_bp
+from .tools_routes import tools_bp

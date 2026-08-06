@@ -56,8 +56,9 @@
 }
 .config-col.unlocked .drag-handle { display: inline; }
 .config-col.unlocked .config-card { cursor: default; }
+.config-col.unlocked .card-body { user-select: text; }
 
-.card-body { padding: 1rem; }
+.card-body { padding: 1rem; user-select: text; }
 .card-body > * + * { margin-top: .75rem; }
 
 /* fieldset-like sections inside cards (no border needed, card provides it) */
@@ -125,6 +126,44 @@
           <div style="flex:1">
             <label for="refresh_time">{{ t("config.cache_time") }}</label>
             <input type="time" id="refresh_time" name="refresh_time" value="{{ config.get('REFRESH_TIME','03:00') }}">
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0;">
+
+        <div>
+          <label class="checkbox-label">
+            <input type="checkbox" name="playlist_auto_sync" id="playlist_auto_sync"
+                   {% if config.get('PLAYLIST_AUTO_SYNC') %}checked{% endif %}>
+            Synchronisation automatique des playlists
+          </label>
+          <p class="muted" style="margin:.3rem 0 .5rem; font-size:.82rem;">
+            Re-vérifie les placeholders ⏳ de toutes les playlists sauvegardées et met Plex à jour si de nouveaux items sont disponibles.
+            Le token Plex est sauvegardé automatiquement à la connexion.
+          </p>
+          <div class="row-inline" style="align-items:flex-end;gap:.75rem;">
+            <div>
+              <label for="playlist_auto_sync_time">Heure de sync</label>
+              <input type="time" id="playlist_auto_sync_time" name="playlist_auto_sync_time"
+                     value="{{ config.get('PLAYLIST_AUTO_SYNC_TIME','00:00') }}">
+            </div>
+            <div style="flex:1">
+              <label>Token Plex (scheduler)</label>
+              <input type="text" readonly
+                     value="{{ '● Enregistré' if config.get('PLEX_TOKEN_SCHEDULER') else '✗ Non enregistré — connecte-toi pour le sauvegarder' }}"
+                     style="color:{{ '#4caf50' if config.get('PLEX_TOKEN_SCHEDULER') else '#f44336' }};cursor:default;">
+            </div>
+          </div>
+          <div style="margin-top:.6rem;">
+            <label class="checkbox-label">
+              <input type="checkbox" name="playlist_auto_push_sync" id="playlist_auto_push_sync"
+                     {% if config.get('PLAYLIST_AUTO_PUSH_SYNC') %}checked{% endif %}>
+              Synchronisation push automatique
+            </label>
+            <p class="muted" style="margin:.3rem 0 0; font-size:.82rem;">
+              Compare le nombre d'éléments de chaque playlist dans Plex avec le store PlexHarvester.
+              Si Plex en a moins (ex : item ajouté manuellement, playlist supprimée), re-pousse automatiquement.
+            </p>
           </div>
         </div>
         {% if is_logged_in and plex_libraries %}
@@ -1271,6 +1310,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const lockBtn  = document.getElementById('btn-lock');
   const allCols  = [colLeft, colRight];
   let dragged = null;
+  let _dragFromHandle = false;
+
+  // Tracker mousedown sur la poignée (délégué aux colonnes)
+  allCols.forEach(col => {
+    col.addEventListener('mousedown', (e) => {
+      _dragFromHandle = !!e.target.closest('.drag-handle');
+    });
+  });
+  document.addEventListener('mouseup', () => { _dragFromHandle = false; });
 
   // Default column distribution
   const DEFAULT_LEFT  = ['card-plex', 'card-aliases', 'card-ftp', 'card-schedule', 'card-ignore'];
@@ -1324,6 +1372,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     col.addEventListener('dragstart', (e) => {
       const card = e.target.closest('.config-card');
       if (!card || col.classList.contains('locked')) { e.preventDefault(); return; }
+      // N'autoriser le drag que depuis la poignée
+      if (!_dragFromHandle) { e.preventDefault(); return; }
       dragged = card;
       setTimeout(() => card.classList.add('dragging'), 0);
       e.dataTransfer.effectAllowed = 'move';

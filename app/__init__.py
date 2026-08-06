@@ -180,7 +180,7 @@ def create_app():
     # ------------------------------------------------------------------
     # Blueprints
     # ------------------------------------------------------------------
-    from .routes import auth_bp, config_bp, dashboard_bp, my_dashboard_bp, mkv_bp, snapshot_bp, playlist_bp
+    from .routes import auth_bp, config_bp, dashboard_bp, my_dashboard_bp, mkv_bp, snapshot_bp, playlist_bp, tools_bp
     from .routes.mkv_routes import setup_auto_mkv_hook
 
     app.register_blueprint(auth_bp)
@@ -191,6 +191,7 @@ def create_app():
     app.register_blueprint(ftp_bp)
     app.register_blueprint(snapshot_bp)
     app.register_blueprint(playlist_bp)
+    app.register_blueprint(tools_bp)
 
     # ------------------------------------------------------------------
     # Error handlers
@@ -233,5 +234,7 @@ def create_app():
         with app.app_context():
             start_ftp_queue_worker(app)
             setup_auto_mkv_hook(app)
+            from .services.playlist_scheduler import start_playlist_scheduler
+            start_playlist_scheduler(app)
 
     return app

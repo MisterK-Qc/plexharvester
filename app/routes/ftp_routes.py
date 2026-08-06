@@ -11,8 +11,11 @@ from app.services.ftp_index_service import (
 
 from app.services.ftp_download_service import (
     create_ftp_download_job,
+    create_ftp_download_jobs_batch,
     cancel_ftp_job,
+    cancel_ftp_jobs_batch,
     get_download_status,
+    get_download_status_batch,
     get_download_status_by_media_key,
     move_ftp_job_up,
     move_ftp_job_down,
@@ -120,6 +123,9 @@ def queue_download():
             media_type=data.get("media_type", "movie"),
             media_key=data.get("media_key"),
             ftp_id=data.get("ftp_id") or None,
+            season=data.get("season"),
+            episode=data.get("episode"),
+            series_title=data.get("series_title"),
         )
 
         return jsonify({
@@ -135,6 +141,49 @@ def queue_download():
             "success": False,
             "error": str(e),
         }), 400
+
+
+@ftp_bp.route("/queue_download_batch", methods=["POST"])
+def queue_download_batch():
+    data = request.get_json() or {}
+    episodes = data.get("episodes") or []
+
+    if not episodes:
+        return jsonify({"success": False, "error": "episodes manquant"}), 400
+
+    job_ids, errors = create_ftp_download_jobs_batch(episodes)
+
+    if not job_ids:
+        return jsonify({"success": False, "error": "; ".join(errors) or "Aucun job créé"}), 400
+
+    return jsonify({
+        "success": True,
+        "job_ids": job_ids,
+        "count": len(job_ids),
+        "errors": errors,
+    })
+
+
+@ftp_bp.route("/download_status_batch", methods=["POST"])
+def download_status_batch():
+    data = request.get_json() or {}
+    job_ids = data.get("job_ids") or []
+
+    if not job_ids:
+        return jsonify({"success": False, "error": "job_ids manquant"}), 400
+
+    return jsonify({"success": True, "statuses": get_download_status_batch(job_ids)})
+
+
+@ftp_bp.route("/cancel_download_batch", methods=["POST"])
+def cancel_download_batch():
+    data = request.get_json() or {}
+    job_ids = data.get("job_ids") or []
+
+    if not job_ids:
+        return jsonify({"success": False, "error": "job_ids manquant"}), 400
+
+    return jsonify({"success": True, "results": cancel_ftp_jobs_batch(job_ids)})
 
 
 @ftp_bp.route("/cancel_download", methods=["POST"])

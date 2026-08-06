@@ -1,0 +1,1144 @@
+{% extends "base.html" %}
+{% block title %}Outils — PlexHarvester{% endblock %}
+
+{% block head %}
+<style>
+  .tools-layout {
+    display: flex;
+    height: calc(100vh - var(--nav-h, 48px));
+  }
+  .tools-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: #1a1a2e;
+    border-right: 1px solid #333;
+    padding: 1rem 0;
+  }
+  .tools-sidebar-item {
+    display: block;
+    padding: 0.75rem 1.25rem;
+    color: #aaa;
+    text-decoration: none;
+    font-size: 0.9rem;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+  }
+  .tools-sidebar-item:hover { color: #fff; background: rgba(255,255,255,0.05); }
+  .tools-sidebar-item.active { color: #e5a00d; border-left-color: #e5a00d; background: rgba(229,160,13,0.08); }
+  .tools-sidebar-label { padding: 0.5rem 1.25rem; font-size: 0.7rem; text-transform: uppercase; color: #555; letter-spacing: 0.08em; }
+
+  .tools-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+  }
+  .tools-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #e5a00d;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #333;
+  }
+  .tools-section { margin-bottom: 1.5rem; }
+  .tools-section-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #888;
+    margin-bottom: 0.5rem;
+  }
+
+  .lib-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.5rem;
+  }
+  .lib-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #1e1e30;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    font-size: 0.85rem;
+  }
+  .lib-card:hover { border-color: #e5a00d; }
+  .lib-card input[type=checkbox] { accent-color: #e5a00d; }
+  .lib-type-badge {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #333;
+    color: #aaa;
+    margin-left: auto;
+  }
+
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.4rem;
+  }
+  .provider-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #1e1e30;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: border-color 0.15s;
+  }
+  .provider-card:hover { border-color: #e5a00d; }
+  .provider-card input[type=checkbox] { accent-color: #e5a00d; }
+
+  .tools-actions { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+  .btn-run {
+    background: #e5a00d;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: opacity 0.15s;
+  }
+  .btn-run:hover { opacity: 0.85; }
+  .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .progress-bar-wrap {
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #e5a00d;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  .progress-stats {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.8rem;
+    color: #aaa;
+    margin-bottom: 0.75rem;
+  }
+  .progress-stats span b { color: #fff; }
+
+  .log-box {
+    background: #0d0d1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-family: monospace;
+    font-size: 0.78rem;
+    height: 320px;
+    overflow-y: auto;
+    color: #ccc;
+    line-height: 1.6;
+  }
+  .log-box .log-ok  { color: #4caf50; }
+  .log-box .log-err { color: #f44336; }
+  .log-box .log-inf { color: #aaa; }
+
+  .path-input {
+    width: 100%;
+    background: #1e1e30;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    color: #fff;
+    font-size: 0.85rem;
+    font-family: monospace;
+    box-sizing: border-box;
+  }
+  .path-input:focus { outline: none; border-color: #e5a00d; }
+
+  .opts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+  }
+  .opt-card {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #1e1e30;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: border-color 0.15s;
+  }
+  .opt-card:hover { border-color: #e5a00d; }
+  .opt-card input[type=checkbox] { accent-color: #e5a00d; }
+
+  .overrides-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .override-field label { display: block; font-size: 0.72rem; color: #888; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .override-field input, .override-field select {
+    width: 100%;
+    background: #1e1e30;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 0.35rem 0.5rem;
+    color: #ccc;
+    font-size: 0.82rem;
+    box-sizing: border-box;
+  }
+  .override-field input:focus, .override-field select:focus { outline: none; border-color: #e5a00d; }
+
+  .collapsible-toggle {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 0.5rem;
+    text-decoration: underline;
+  }
+  .collapsible-toggle:hover { color: #e5a00d; }
+
+  .mediainfo-warn {
+    background: #3a2a00;
+    border: 1px solid #e5a00d88;
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-size: 0.82rem;
+    color: #e5a00d;
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tools-layout">
+
+  <!-- Sidebar -->
+  <nav class="tools-sidebar">
+    <div class="tools-sidebar-label">Outils</div>
+    <a href="{{ url_for('tools.tools_page', tool='streaming') }}"
+       class="tools-sidebar-item {% if active_tool == 'streaming' %}active{% endif %}">
+      🏷️ Étiquettes streaming
+    </a>
+    <a href="{{ url_for('tools.tools_page', tool='rename') }}"
+       class="tools-sidebar-item {% if active_tool == 'rename' %}active{% endif %}">
+      ✏️ Rename Scene
+    </a>
+    <a href="{{ url_for('tools.tools_page', tool='multi_audio') }}"
+       class="tools-sidebar-item {% if active_tool == 'multi_audio' %}active{% endif %}">
+      🎵 Multi Audio Merger
+    </a>
+  </nav>
+
+  <!-- Contenu principal -->
+  <main class="tools-content">
+
+    {% if active_tool == 'streaming' %}
+    <!-- ======================== ÉTIQUETTES STREAMING ======================== -->
+    <div class="tools-title">🏷️ Étiquettes streaming Plex</div>
+    <p style="color:#aaa;font-size:0.85rem;margin-bottom:1.5rem;">
+      Interroge TMDb par item pour ajouter automatiquement les étiquettes de service streaming
+      (Netflix, Prime Video, Disney+…) dans Plex. Compatible avec les collections Kometa
+      basées sur <code>plex_search: label: X</code>.
+    </p>
+
+    {% if error %}
+    <div style="background:#3a1a1a;border:1px solid #f44;border-radius:6px;padding:0.75rem 1rem;color:#f88;margin-bottom:1rem;font-size:0.85rem;">
+      ❌ {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Bibliothèques -->
+    <div class="tools-section">
+      <div class="tools-section-label">Bibliothèques</div>
+      {% if libraries %}
+      <div class="lib-grid" id="lib-grid">
+        {% for lib in libraries %}
+        <label class="lib-card">
+          <input type="checkbox" class="lib-check" value="{{ lib.name }}" checked>
+          <span>{{ lib.name }}</span>
+          <span class="lib-type-badge">{{ "série" if lib.type == "show" else "film" }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:#666;font-size:0.85rem;">Aucune bibliothèque trouvée.</p>
+      {% endif %}
+    </div>
+
+    <!-- Services -->
+    <div class="tools-section">
+      <div class="tools-section-label">Services streaming (CA)</div>
+      <div class="provider-grid">
+        {% for pid, name in providers.items() %}
+        <label class="provider-card">
+          <input type="checkbox" class="provider-check" value="{{ pid }}" checked>
+          <span>{{ name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="tools-actions">
+      <button class="btn-run" id="btn-run">▶ Lancer</button>
+      <span id="run-status" style="font-size:0.82rem;color:#aaa;"></span>
+    </div>
+
+    <!-- Progression -->
+    <div id="progress-section" style="display:none;">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-stats">
+        <span><b id="stat-processed">0</b> / <b id="stat-total">0</b> traités</span>
+        <span>✅ <b id="stat-labeled">0</b> labellisés</span>
+        <span>⏭ <b id="stat-skipped">0</b> sans ID</span>
+        <span>❌ <b id="stat-errors">0</b> erreurs</span>
+      </div>
+      <div class="log-box" id="log-box"></div>
+    </div>
+
+    {% elif active_tool == 'rename' %}
+    <!-- ======================== RENAME SCENE ======================== -->
+    <div class="tools-title">✏️ Rename Scene</div>
+    <p style="color:#aaa;font-size:0.85rem;margin-bottom:1.25rem;">
+      Renomme les fichiers vidéo en nomenclature scène. Détecte automatiquement la résolution,
+      le codec, le service streaming (via TMDB + JustWatch) et la langue audio.
+    </p>
+
+    {% if not mediainfo_available %}
+    <div class="mediainfo-warn">
+      ⚠️ <strong>MediaInfo non disponible</strong> — le package <code>pymediainfo</code> est installé
+      mais la librairie système <code>mediainfo</code> est introuvable. Rebuild l'image Docker pour l'activer.
+    </div>
+    {% endif %}
+
+    <!-- Chemin + filtre -->
+    <div class="tools-section">
+      <div class="tools-section-label">Chemin (fichier ou dossier)</div>
+      <input type="text" id="rename-path" class="path-input"
+             placeholder="Ex: /mnt/user/Plex/Films ou /mnt/user/Plex/Films/MonFilm.mkv"
+             style="margin-bottom:0.4rem;">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.4rem;">
+        <div style="flex:1;">
+          <div class="tools-section-label" style="margin-bottom:0.2rem;">Filtre nom de fichier (optionnel)</div>
+          <input type="text" id="rename-filter" class="path-input"
+                 placeholder="Ex: Lara Croft — traite uniquement les fichiers dont le nom contient ce texte">
+        </div>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="tools-section">
+      <div class="tools-section-label">Options</div>
+      <div class="opts-grid">
+        <label class="opt-card">
+          <input type="checkbox" id="opt-dryrun" checked>
+          <span>Dry-run (simulation)</span>
+        </label>
+        <label class="opt-card">
+          <input type="checkbox" id="opt-recursive">
+          <span>Récursif</span>
+        </label>
+        <label class="opt-card">
+          <input type="checkbox" id="opt-nojw">
+          <span>Sans JustWatch</span>
+        </label>
+        <label class="opt-card">
+          <input type="checkbox" id="opt-reprocess">
+          <span>Reprocess (points→espaces)</span>
+        </label>
+        <label class="opt-card">
+          <input type="checkbox" id="opt-force">
+          <span>Force (depuis métadonnées)</span>
+        </label>
+        <label class="opt-card"{% if not ffmpeg_available %} style="opacity:0.5;"{% endif %}>
+          <input type="checkbox" id="opt-validate"{% if not ffmpeg_available %} disabled{% endif %}>
+          <span>Valider intégrité (décodage complet)</span>
+        </label>
+      </div>
+      {% if not ffmpeg_available %}
+      <p style="color:#f88;font-size:0.78rem;margin-top:0.5rem;">
+        ⚠️ <code>ffmpeg</code> introuvable — validation d'intégrité indisponible.
+      </p>
+      {% else %}
+      <p style="color:#666;font-size:0.75rem;margin-top:0.4rem;">
+        Décode le fichier en entier pour détecter la corruption en milieu de fichier (plus lent qu'une simple lecture d'en-tête).
+      </p>
+      {% endif %}
+    </div>
+
+    <!-- Tri automatique -->
+    <div class="tools-section">
+      <div class="tools-section-label">Tri automatique (optionnel)</div>
+      <input type="text" id="opt-output-dir" class="path-input"
+             placeholder="Ex: /mnt/user/Plex/Trié — active le tri en 4 dossiers au lieu du renommage sur place">
+      <p style="color:#888;font-size:0.78rem;margin-top:0.4rem;">
+        Si rempli, chaque fichier est <strong>déplacé</strong> (pas copié) vers
+        <code>Renommés/Titre (Année)/</code>, <code>Non_Identifiés/</code>, <code>Corrompus/</code> ou
+        <code>Non_Renommés/</code> selon son statut, au lieu d'être renommé sur place.
+        « Corrompus » nécessite l'option Valider intégrité ci-dessus.
+      </p>
+    </div>
+
+    <!-- Overrides (collapsible) -->
+    <div class="tools-section">
+      <button class="collapsible-toggle" id="toggle-overrides">▶ Overrides optionnels</button>
+      <div id="overrides-panel" style="display:none;">
+        <div class="overrides-grid">
+          <div class="override-field">
+            <label>Service</label>
+            <select id="ov-service">
+              <option value="">— auto —</option>
+              <option>NF</option><option>AMZN</option><option>DSNP</option>
+              <option>ATVP</option><option>MAX</option><option>CRAV</option>
+              <option>PMTP</option><option>CR</option><option>GEM</option>
+              <option>TUBI</option><option>YT</option><option>PCOK</option>
+            </select>
+          </div>
+          <div class="override-field">
+            <label>Source</label>
+            <select id="ov-source">
+              <option value="">— auto —</option>
+              <option>WEB-DL</option><option>WEBRip</option>
+              <option>BluRay.REMUX</option><option>DVDRip</option><option>BDRip</option>
+            </select>
+          </div>
+          <div class="override-field">
+            <label>Pays JustWatch</label>
+            <input type="text" id="ov-country" placeholder="CA" maxlength="2" style="text-transform:uppercase;">
+          </div>
+          <div class="override-field">
+            <label>Tag team</label>
+            <input type="text" id="ov-team" placeholder="Ex: MKQC">
+          </div>
+          <div class="override-field">
+            <label>TMDB ID</label>
+            <input type="number" id="ov-tmdbid" placeholder="Optionnel">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="tools-actions">
+      <button class="btn-run" id="btn-rename">▶ Lancer</button>
+      <span id="rename-status-txt" style="font-size:0.82rem;color:#aaa;"></span>
+    </div>
+
+    <!-- Progression -->
+    <div id="rename-progress-section" style="display:none;">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="rename-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-stats">
+        <span><b id="rn-processed">0</b> / <b id="rn-total">0</b> traités</span>
+        <span>✏️ <b id="rn-renamed">0</b> renommés</span>
+        <span>✅ <b id="rn-ok">0</b> déjà OK</span>
+        <span>❓ <b id="rn-unidentified">0</b> non identifiés</span>
+        <span>📦 <b id="rn-corrupted">0</b> corrompus</span>
+        <span>❌ <b id="rn-errors">0</b> erreurs</span>
+      </div>
+      <div class="log-box" id="rename-log-box"></div>
+    </div>
+
+    {% elif active_tool == 'multi_audio' %}
+    <!-- ======================== MULTI AUDIO MERGER ======================== -->
+    <div class="tools-title">🎵 Multi Audio Merger</div>
+    <p style="color:#aaa;font-size:0.85rem;margin-bottom:1.25rem;">
+      Fusionne des MKV en plusieurs langues en un seul fichier multi-audio via <code>alass</code> + <code>ffmpeg</code>.
+      Les originaux sont déplacés dans <code>originals/</code>.
+    </p>
+
+    {% if multi_audio_deps %}
+    <div style="background:#3a1a1a;border:1px solid #f44;border-radius:6px;padding:0.75rem 1rem;color:#f88;margin-bottom:1rem;font-size:0.85rem;">
+      ❌ Dépendances manquantes : <strong>{{ multi_audio_deps | join(', ') }}</strong> — rebuild l'image Docker.
+    </div>
+    {% endif %}
+
+    <!-- Toggle mode -->
+    <div class="tools-section">
+      <div class="tools-section-label">Mode</div>
+      <div style="display:flex;gap:0.5rem;">
+        <button id="da-mode-auto" onclick="daSetMode('auto')"
+          style="padding:0.4rem 1rem;border-radius:6px;border:2px solid #e5a00d;background:#e5a00d;color:#000;font-weight:600;font-size:0.82rem;cursor:pointer;">
+          📂 Auto (dossier)
+        </button>
+        <button id="da-mode-manual" onclick="daSetMode('manual')"
+          style="padding:0.4rem 1rem;border-radius:6px;border:2px solid #444;background:transparent;color:#aaa;font-weight:600;font-size:0.82rem;cursor:pointer;">
+          🎯 Manuel (2 fichiers)
+        </button>
+      </div>
+    </div>
+
+    <!-- Champs AUTO -->
+    <div id="da-auto-fields">
+      <div class="tools-section">
+        <div class="tools-section-label">Dossier contenant les MKV</div>
+        <input type="text" id="da-path" class="path-input"
+               placeholder="Ex: /mnt/user/Plex/Films/Avatar">
+      </div>
+      <details style="margin-bottom:1rem;">
+        <summary style="cursor:pointer;font-size:0.78rem;color:#888;">ℹ️ Conventions de nommage attendues</summary>
+        <div style="background:#1e1e30;border:1px solid #333;border-radius:6px;padding:0.6rem 0.9rem;margin-top:0.4rem;font-size:0.78rem;color:#ccc;font-family:monospace;line-height:1.8;">
+          Films : <span style="color:#e5a00d;">Title {edition-English}.mkv</span> + <span style="color:#e5a00d;">Title {edition-Français}.mkv</span><br>
+          Séries : <span style="color:#e5a00d;">Show S01E01 {edition-English}.mkv</span> + idem FR<br>
+          Aussi : <code>.eng.</code> / <code>.fre.</code> / <code>.french.</code>
+        </div>
+      </details>
+      <div class="tools-section">
+        <div class="tools-section-label">Options</div>
+        <div class="opts-grid">
+          <label class="opt-card"><input type="checkbox" id="da-dryrun" checked><span>Dry-run (simulation)</span></label>
+          <label class="opt-card"><input type="checkbox" id="da-recursive"><span>Récursif (sous-dossiers)</span></label>
+        </div>
+      </div>
+      <details style="margin-bottom:1rem;">
+        <summary style="cursor:pointer;font-size:0.78rem;color:#888;">⚙️ Sync avancé (séries doublées / intros différentes)</summary>
+        <div style="background:#1e1e30;border:1px solid #333;border-radius:6px;padding:0.75rem 1rem;margin-top:0.4rem;">
+          <p style="color:#888;font-size:0.78rem;margin:0 0 0.75rem;">
+            Si une version a une intro ou un pré-roll absent de l'autre (ex: carton réseau, "previously on…"),
+            la détection automatique de l'offset initial échoue. Entre l'offset mesuré dans Audition pour un premier épisode —
+            le xcorr utilisera cette valeur comme point de départ et calculera la dérive de vitesse automatiquement.
+            Les variations épisode-à-épisode (recap de durée variable) sont couvertes par la plage de recherche ±45s.
+          </p>
+          <div class="override-field" style="max-width:280px;">
+            <label>Offset initial connu (ms) <span style="color:#666;font-size:0.75rem;">— optionnel, 0 = détection auto</span></label>
+            <input type="number" id="da-hint-offset" placeholder="Ex: 23800" step="1" value="0">
+          </div>
+
+          <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #2a2a3e;">
+            <p style="color:#888;font-size:0.78rem;margin:0 0 0.6rem;">
+              <strong style="color:#aaa;">Calcul automatique de la vitesse</strong> — note la position dans chaque fichier
+              au même moment (son de référence). Plusieurs points = meilleure précision (moindres carrés).
+            </p>
+            <div id="da-ref-points" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem;"></div>
+            <div style="display:flex;align-items:center;gap:1rem;">
+              <button type="button" id="da-add-ref" style="background:#252540;border:1px solid #444;color:#aaa;padding:0.2rem 0.6rem;border-radius:4px;font-size:0.8rem;cursor:pointer;">+ Ajouter un repère</button>
+              <span style="font-size:0.78rem;color:#666;">→ atempo = </span>
+              <span id="da-calc-atempo" style="font-family:monospace;font-size:0.88rem;color:#e5a00d;font-weight:600;">—</span>
+              <span id="da-calc-npts" style="font-size:0.72rem;color:#555;"></span>
+            </div>
+            <p style="color:#555;font-size:0.72rem;margin:0.4rem 0 0;">
+              Formule&nbsp;: <code style="color:#777;">(t_EN − offset_s) / (t_FR − offset_s)</code> par point, puis moyenne pondérée (moindres carrés).
+            </p>
+          </div>
+
+          <div class="override-field" style="max-width:280px;margin-top:0.75rem;">
+            <label>Vitesse (atempo) <span style="color:#666;font-size:0.75rem;">— auto-calculée ci-dessus, ou saisie manuelle (0 = xcorr auto)</span></label>
+            <input type="number" id="da-hint-atempo" placeholder="Ex: 1.05658" step="0.00001" min="0.9" max="1.1" value="0">
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- Champs MANUEL -->
+    <div id="da-manual-fields" style="display:none;">
+      <div class="tools-section">
+        <div class="tools-section-label">Fichier référence — fournit la vidéo + audio principal</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <input type="text" id="da-file-ref" class="path-input"
+                 placeholder="Ex: /mnt/user/Plex/Films/André the Giant.mkv">
+          <select id="da-lang-ref" style="flex-shrink:0;width:160px;background:#1e1e30;border:1px solid #444;border-radius:6px;padding:0.45rem 0.6rem;color:#ccc;font-size:0.82rem;">
+            <option value="">Langue auto</option>
+            <option value="en">EN — Anglais</option>
+            <option value="fr">FR — Français</option>
+            <option value="de">DE — Allemand</option>
+            <option value="es">ES — Espagnol</option>
+            <option value="it">IT — Italien</option>
+            <option value="pt">PT — Portugais</option>
+            <option value="ja">JA — Japonais</option>
+            <option value="ko">KO — Coréen</option>
+            <option value="zh">ZH — Chinois</option>
+          </select>
+        </div>
+      </div>
+      <div class="tools-section">
+        <div class="tools-section-label">Fichier secondaire — seulement l'audio est extrait</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <input type="text" id="da-file-sec" class="path-input"
+                 placeholder="Ex: /mnt/user/Plex/Films/Andre le geant.mkv">
+          <select id="da-lang-sec" style="flex-shrink:0;width:160px;background:#1e1e30;border:1px solid #444;border-radius:6px;padding:0.45rem 0.6rem;color:#ccc;font-size:0.82rem;">
+            <option value="">Langue auto</option>
+            <option value="en">EN — Anglais</option>
+            <option value="fr">FR — Français</option>
+            <option value="de">DE — Allemand</option>
+            <option value="es">ES — Espagnol</option>
+            <option value="it">IT — Italien</option>
+            <option value="pt">PT — Portugais</option>
+            <option value="ja">JA — Japonais</option>
+            <option value="ko">KO — Coréen</option>
+            <option value="zh">ZH — Chinois</option>
+          </select>
+        </div>
+      </div>
+      <div class="tools-section">
+        <div class="tools-section-label">Options</div>
+        <div class="opts-grid">
+          <label class="opt-card"><input type="checkbox" id="da-dryrun-manual" checked><span>Dry-run (simulation)</span></label>
+        </div>
+      </div>
+
+      <!-- Correction segmentée (optionnel) -->
+      <div class="tools-section">
+        <button class="collapsible-toggle" id="toggle-segmented">▶ Correction segmentée (points Audition)</button>
+        <div id="segmented-panel" style="display:none;">
+          <p style="color:#888;font-size:0.78rem;margin:0 0 0.75rem;">
+            Si la vitesse n'est pas constante dans le film, entre des points de sync mesurés dans Audition
+            (timecode du fichier fusionné précédent). Laisse vide pour utiliser la correction automatique.
+          </p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.75rem;">
+            <div class="override-field">
+              <label>Offset précédent (ms)</label>
+              <input type="number" id="da-prev-offset" placeholder="Ex: 5650" step="1">
+            </div>
+            <div class="override-field">
+              <label>Vitesse précédente (ex: 1.00125)</label>
+              <input type="number" id="da-prev-speed" placeholder="Ex: 1.00125" step="0.00001">
+            </div>
+          </div>
+          <div class="tools-section-label" style="margin-bottom:0.4rem;">Points de synchronisation</div>
+          <div id="sync-points-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem;"></div>
+          <button onclick="daAddSyncPoint()"
+            style="background:transparent;border:1px dashed #555;border-radius:6px;padding:0.35rem 0.75rem;color:#888;font-size:0.78rem;cursor:pointer;">
+            + Ajouter un point
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="tools-actions">
+      <button class="btn-run" id="btn-da"{% if multi_audio_deps %} disabled{% endif %}>▶ Lancer</button>
+      <span id="da-status-txt" style="font-size:0.82rem;color:#aaa;">
+        {%- if multi_audio_deps -%}⚠️ Rebuild requis — {{ multi_audio_deps | join(', ') }}{%- endif -%}
+      </span>
+    </div>
+
+    <!-- Progression -->
+    <div id="da-progress-section" style="display:none;">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="da-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-stats">
+        <span><b id="da-processed">0</b> / <b id="da-total">0</b> paires</span>
+        <span>✅ <b id="da-success">0</b> réussies</span>
+        <span>❌ <b id="da-failed">0</b> échouées</span>
+      </div>
+      <div class="log-box" id="da-log-box"></div>
+    </div>
+
+    {% endif %}
+  </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if active_tool == 'rename' %}
+<script>
+(function () {
+  // Collapsible
+  document.getElementById('toggle-overrides').addEventListener('click', function () {
+    const panel = document.getElementById('overrides-panel');
+    const open  = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    this.textContent = (open ? '▶' : '▼') + ' Overrides optionnels';
+  });
+
+  const btnRename   = document.getElementById('btn-rename');
+  const statusTxt   = document.getElementById('rename-status-txt');
+  const progressSec = document.getElementById('rename-progress-section');
+  const progressFill= document.getElementById('rename-progress-fill');
+  const logBox      = document.getElementById('rename-log-box');
+
+  let es = null;
+
+  function updateStats(data) {
+    document.getElementById('rn-processed').textContent = data.processed ?? 0;
+    document.getElementById('rn-total').textContent     = data.total ?? 0;
+    document.getElementById('rn-renamed').textContent   = data.renamed ?? 0;
+    document.getElementById('rn-ok').textContent        = data.already_ok ?? 0;
+    document.getElementById('rn-unidentified').textContent = data.unidentified ?? 0;
+    document.getElementById('rn-corrupted').textContent = data.corrupted ?? 0;
+    document.getElementById('rn-errors').textContent    = data.errors ?? 0;
+    const pct = Math.round(((data.processed || 0) / (data.total || 1)) * 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  function appendLog(msg) {
+    const line = document.createElement('div');
+    if (msg.startsWith('✅') || msg.startsWith('✔')) line.className = 'log-ok';
+    else if (msg.startsWith('❌')) line.className = 'log-err';
+    else line.className = 'log-inf';
+    line.textContent = msg;
+    logBox.appendChild(line);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function startStream() {
+    if (es) { es.close(); es = null; }
+    es = new EventSource('/tools/rename/stream');
+    es.onmessage = function (e) {
+      const data = JSON.parse(e.data);
+      if (data.type === 'log')    { appendLog(data.msg); }
+      else if (data.type === 'status') { updateStats(data); }
+      else if (data.type === 'done') {
+        es.close(); es = null;
+        btnRename.disabled = false;
+        statusTxt.textContent = 'Terminé.';
+      }
+    };
+    es.onerror = function () {
+      es.close(); es = null;
+      btnRename.disabled = false;
+      statusTxt.textContent = 'Connexion interrompue.';
+    };
+  }
+
+  // Check job en cours au chargement
+  fetch('/tools/rename/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.running) {
+        progressSec.style.display = 'block';
+        btnRename.disabled = true;
+        statusTxt.textContent = 'Job en cours…';
+        updateStats(data);
+        data.log.forEach(appendLog);
+        startStream();
+      }
+    });
+
+  btnRename.addEventListener('click', function () {
+    const path = document.getElementById('rename-path').value.trim();
+    if (!path) { statusTxt.textContent = 'Entre un chemin.'; return; }
+
+    const country = (document.getElementById('ov-country').value.trim() || 'CA').toUpperCase();
+
+    logBox.innerHTML = '';
+    progressFill.style.width = '0%';
+    progressSec.style.display = 'block';
+    btnRename.disabled = true;
+    statusTxt.textContent = 'Démarrage…';
+
+    fetch('/tools/rename/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path:        path,
+        name_filter: document.getElementById('rename-filter').value.trim() || null,
+        dry_run:     document.getElementById('opt-dryrun').checked,
+        recursive:   document.getElementById('opt-recursive').checked,
+        no_justwatch: document.getElementById('opt-nojw').checked,
+        reprocess:   document.getElementById('opt-reprocess').checked,
+        force:       document.getElementById('opt-force').checked,
+        validate:    document.getElementById('opt-validate').checked,
+        output_dir:  document.getElementById('opt-output-dir').value.trim() || null,
+        service:     document.getElementById('ov-service').value || null,
+        source:      document.getElementById('ov-source').value || null,
+        country:     country,
+        team:        document.getElementById('ov-team').value.trim() || null,
+        tmdb_id:     parseInt(document.getElementById('ov-tmdbid').value) || null,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          statusTxt.textContent = '❌ ' + data.error;
+          btnRename.disabled = false;
+        } else {
+          statusTxt.textContent = 'En cours…';
+          startStream();
+        }
+      })
+      .catch(() => {
+        statusTxt.textContent = '❌ Erreur réseau';
+        btnRename.disabled = false;
+      });
+  });
+})();
+</script>
+{% endif %}
+{% if active_tool == 'multi_audio' %}
+<script>
+(function () {
+  const btn        = document.getElementById('btn-da');
+  const statusTxt  = document.getElementById('da-status-txt');
+  const progressSec= document.getElementById('da-progress-section');
+  const progressFill=document.getElementById('da-progress-fill');
+  const logBox     = document.getElementById('da-log-box');
+  let es = null;
+  let currentMode = 'auto';
+
+  // ── Segmented sync points ──────────────────────────────────────────────
+  document.getElementById('toggle-segmented').addEventListener('click', function () {
+    const panel = document.getElementById('segmented-panel');
+    const open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    this.textContent = (open ? '▶' : '▼') + ' Correction segmentée (points Audition)';
+  });
+
+  let syncPointCount = 0;
+
+  window.daAddSyncPoint = function () {
+    syncPointCount++;
+    const id = syncPointCount;
+    const row = document.createElement('div');
+    row.id = 'sp-row-' + id;
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr auto;gap:0.4rem;align-items:end;';
+    row.innerHTML = `
+      <div class="override-field">
+        <label>EN (HH:MM:SS.mmm ou secondes)</label>
+        <input type="text" id="sp-en-${id}" class="sp-en" placeholder="Ex: 49:02.076">
+      </div>
+      <div class="override-field">
+        <label>FR (HH:MM:SS.mmm ou secondes)</label>
+        <input type="text" id="sp-fr-${id}" class="sp-fr" placeholder="Ex: 49:01.981">
+      </div>
+      <button onclick="document.getElementById('sp-row-${id}').remove()"
+        style="background:transparent;border:1px solid #555;border-radius:4px;padding:0.3rem 0.6rem;color:#888;cursor:pointer;font-size:0.82rem;margin-bottom:1px;">✕</button>
+    `;
+    document.getElementById('sync-points-list').appendChild(row);
+  };
+
+  function daParseTimecodeToSec(s) {
+    s = s.trim();
+    if (!s) return NaN;
+    // Formats: SS.mmm | MM:SS.mmm | HH:MM:SS.mmm
+    const parts = s.split(':');
+    let total = 0;
+    for (const p of parts) total = total * 60 + parseFloat(p);
+    return total;
+  }
+
+  function daAddRefPoint(frVal, enVal) {
+    const container = document.getElementById('da-ref-points');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:0.5rem;align-items:center;';
+    row.innerHTML = `
+      <input type="text" class="da-ref-fr" placeholder="FR ex: 09:54.873" value="${frVal||''}"
+        style="font-family:monospace;width:130px;background:#111;border:1px solid #333;color:#ccc;padding:0.25rem 0.4rem;border-radius:4px;font-size:0.82rem;">
+      <span style="color:#555;font-size:0.8rem;">→</span>
+      <input type="text" class="da-ref-en" placeholder="EN ex: 10:22.396" value="${enVal||''}"
+        style="font-family:monospace;width:130px;background:#111;border:1px solid #333;color:#ccc;padding:0.25rem 0.4rem;border-radius:4px;font-size:0.82rem;">
+      <button type="button" class="da-del-ref" style="background:none;border:none;color:#555;cursor:pointer;font-size:1rem;padding:0 0.2rem;" title="Supprimer">×</button>`;
+    row.querySelector('.da-del-ref').addEventListener('click', () => { row.remove(); daCalcAtempo(); });
+    row.querySelectorAll('input').forEach(i => i.addEventListener('input', daCalcAtempo));
+    container.appendChild(row);
+    daCalcAtempo();
+  }
+
+  function daCalcAtempo() {
+    const offsetMs  = parseFloat(document.getElementById('da-hint-offset').value) || 0;
+    const offsetSec = offsetMs / 1000;
+    const display   = document.getElementById('da-calc-atempo');
+    const nPtsEl    = document.getElementById('da-calc-npts');
+    const atempoInput = document.getElementById('da-hint-atempo');
+
+    const rows = document.querySelectorAll('#da-ref-points > div');
+    let sumXY = 0, sumXX = 0, nValid = 0;
+    rows.forEach(row => {
+      const fr = daParseTimecodeToSec(row.querySelector('.da-ref-fr').value);
+      const en = daParseTimecodeToSec(row.querySelector('.da-ref-en').value);
+      if (isNaN(fr) || isNaN(en) || fr <= offsetSec) return;
+      const x = fr - offsetSec, y = en - offsetSec;
+      sumXY += x * y;
+      sumXX += x * x;
+      nValid++;
+    });
+
+    if (nValid === 0 || sumXX === 0) {
+      display.textContent = '—'; display.style.color = '#e5a00d'; nPtsEl.textContent = ''; return;
+    }
+    const atempo = sumXY / sumXX;
+    nPtsEl.textContent = nValid > 1 ? `(${nValid} pts, moindres carrés)` : '(1 pt)';
+    if (atempo < 0.9 || atempo > 1.1) {
+      display.textContent = atempo.toFixed(5) + ' ⚠️'; display.style.color = '#e87040'; return;
+    }
+    display.textContent = atempo.toFixed(5);
+    display.style.color = nValid > 1 ? '#4caf80' : '#aaa';
+    atempoInput.value = atempo.toFixed(5);
+  }
+
+  document.getElementById('da-add-ref').addEventListener('click', () => daAddRefPoint('', ''));
+  document.getElementById('da-hint-offset').addEventListener('input', daCalcAtempo);
+  daAddRefPoint('', ''); // start with one empty row
+
+  function daGetSyncPoints() {
+    const points = [];
+    document.querySelectorAll('#sync-points-list > div').forEach(row => {
+      const enEl = row.querySelector('.sp-en');
+      const frEl = row.querySelector('.sp-fr');
+      if (enEl && frEl && enEl.value.trim() && frEl.value.trim()) {
+        points.push({ en: enEl.value.trim(), fr: frEl.value.trim() });
+      }
+    });
+    return points;
+  }
+
+  // ── Mode toggle ────────────────────────────────────────────────────────
+  window.daSetMode = function (mode) {
+    currentMode = mode;
+    const isAuto = mode === 'auto';
+    document.getElementById('da-auto-fields').style.display   = isAuto ? '' : 'none';
+    document.getElementById('da-manual-fields').style.display = isAuto ? 'none' : '';
+    const btnA = document.getElementById('da-mode-auto');
+    const btnM = document.getElementById('da-mode-manual');
+    btnA.style.background    = isAuto ? '#e5a00d' : 'transparent';
+    btnA.style.color         = isAuto ? '#000' : '#aaa';
+    btnA.style.borderColor   = isAuto ? '#e5a00d' : '#444';
+    btnM.style.background    = isAuto ? 'transparent' : '#e5a00d';
+    btnM.style.color         = isAuto ? '#aaa' : '#000';
+    btnM.style.borderColor   = isAuto ? '#444' : '#e5a00d';
+  };
+
+  // ── Stats & log ────────────────────────────────────────────────────────
+  function updateStats(data) {
+    document.getElementById('da-processed').textContent = data.processed ?? 0;
+    document.getElementById('da-total').textContent     = data.total ?? 0;
+    document.getElementById('da-success').textContent   = data.success ?? 0;
+    document.getElementById('da-failed').textContent    = data.failed ?? 0;
+    const pct = Math.round(((data.processed || 0) / (data.total || 1)) * 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  function appendLog(msg) {
+    const line = document.createElement('div');
+    if (msg.startsWith('✅'))      line.className = 'log-ok';
+    else if (msg.startsWith('❌')) line.className = 'log-err';
+    else                           line.className = 'log-inf';
+    line.textContent = msg;
+    logBox.appendChild(line);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  // ── SSE stream ─────────────────────────────────────────────────────────
+  function startStream() {
+    if (es) { es.close(); es = null; }
+    es = new EventSource('/tools/multi-audio/stream');
+    es.onmessage = function (e) {
+      const data = JSON.parse(e.data);
+      if (data.type === 'log')         appendLog(data.msg);
+      else if (data.type === 'status') updateStats(data);
+      else if (data.type === 'done') {
+        es.close(); es = null;
+        btn.disabled = false;
+        statusTxt.textContent = 'Terminé.';
+      }
+    };
+    es.onerror = function () {
+      es.close(); es = null;
+      btn.disabled = false;
+      statusTxt.textContent = 'Connexion interrompue.';
+    };
+  }
+
+  // ── Restore running job ────────────────────────────────────────────────
+  fetch('/tools/multi-audio/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.running) {
+        progressSec.style.display = 'block';
+        btn.disabled = true;
+        statusTxt.textContent = 'Job en cours…';
+        updateStats(data);
+        data.log.forEach(appendLog);
+        startStream();
+      }
+    });
+
+  // ── Lancer ─────────────────────────────────────────────────────────────
+  btn.addEventListener('click', function () {
+    let body;
+
+    if (currentMode === 'manual') {
+      const fileRef = document.getElementById('da-file-ref').value.trim();
+      const fileSec = document.getElementById('da-file-sec').value.trim();
+      if (!fileRef || !fileSec) { statusTxt.textContent = 'Entre les deux chemins de fichiers.'; return; }
+      const syncPoints = daGetSyncPoints();
+      const prevOffsetRaw = document.getElementById('da-prev-offset').value.trim();
+      const prevSpeedRaw  = document.getElementById('da-prev-speed').value.trim();
+      body = {
+        mode:           'manual',
+        file_ref:       fileRef,
+        file_sec:       fileSec,
+        lang_ref:       document.getElementById('da-lang-ref').value || null,
+        lang_sec:       document.getElementById('da-lang-sec').value || null,
+        dry_run:        document.getElementById('da-dryrun-manual').checked,
+        sync_points:    syncPoints.length ? syncPoints : null,
+        prev_offset_ms: prevOffsetRaw ? parseFloat(prevOffsetRaw) : 0,
+        prev_speed:     prevSpeedRaw  ? parseFloat(prevSpeedRaw)  : 1.0,
+      };
+    } else {
+      const path = document.getElementById('da-path').value.trim();
+      if (!path) { statusTxt.textContent = 'Entre un chemin de dossier.'; return; }
+      const hintRaw    = document.getElementById('da-hint-offset').value.trim();
+      const atempoRaw  = document.getElementById('da-hint-atempo').value.trim();
+      body = {
+        mode:           'auto',
+        directory:      path,
+        dry_run:        document.getElementById('da-dryrun').checked,
+        recursive:      document.getElementById('da-recursive').checked,
+        hint_offset_ms: hintRaw   ? parseFloat(hintRaw)   : 0,
+        hint_atempo:    atempoRaw ? parseFloat(atempoRaw) : 0,
+      };
+    }
+
+    logBox.innerHTML = '';
+    progressFill.style.width = '0%';
+    progressSec.style.display = 'block';
+    btn.disabled = true;
+    statusTxt.textContent = 'Démarrage…';
+
+    fetch('/tools/multi-audio/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          statusTxt.textContent = '❌ ' + data.error;
+          btn.disabled = false;
+        } else {
+          statusTxt.textContent = 'En cours…';
+          startStream();
+        }
+      })
+      .catch(() => {
+        statusTxt.textContent = '❌ Erreur réseau';
+        btn.disabled = false;
+      });
+  });
+})();
+</script>
+{% endif %}
+{% if active_tool == 'streaming' %}
+<script>
+(function () {
+  const btnRun = document.getElementById('btn-run');
+  const statusEl = document.getElementById('run-status');
+  const progressSection = document.getElementById('progress-section');
+  const progressFill = document.getElementById('progress-fill');
+  const logBox = document.getElementById('log-box');
+
+  let es = null;
+
+  function getSelectedLibraries() {
+    return [...document.querySelectorAll('.lib-check:checked')].map(el => el.value);
+  }
+  function getSelectedProviders() {
+    return [...document.querySelectorAll('.provider-check:checked')].map(el => parseInt(el.value));
+  }
+
+  function updateStats(data) {
+    document.getElementById('stat-processed').textContent = data.processed ?? 0;
+    document.getElementById('stat-total').textContent = data.total ?? 0;
+    document.getElementById('stat-labeled').textContent = data.labeled ?? 0;
+    document.getElementById('stat-skipped').textContent = data.skipped ?? 0;
+    document.getElementById('stat-errors').textContent = data.errors ?? 0;
+    const total = data.total || 1;
+    const pct = Math.round((data.processed / total) * 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  function appendLog(msg) {
+    const line = document.createElement('div');
+    if (msg.startsWith('✅')) line.className = 'log-ok';
+    else if (msg.startsWith('❌')) line.className = 'log-err';
+    else line.className = 'log-inf';
+    line.textContent = msg;
+    logBox.appendChild(line);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function startStream() {
+    if (es) { es.close(); es = null; }
+    es = new EventSource('/tools/label/stream');
+    es.onmessage = function (e) {
+      const data = JSON.parse(e.data);
+      if (data.type === 'log') {
+        appendLog(data.msg);
+      } else if (data.type === 'status') {
+        updateStats(data);
+      } else if (data.type === 'done') {
+        es.close(); es = null;
+        btnRun.disabled = false;
+        statusEl.textContent = 'Terminé.';
+      }
+    };
+    es.onerror = function () {
+      es.close(); es = null;
+      btnRun.disabled = false;
+      statusEl.textContent = 'Connexion interrompue.';
+    };
+  }
+
+  // Vérifier si un job tourne déjà au chargement
+  fetch('/tools/label/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.running) {
+        progressSection.style.display = 'block';
+        btnRun.disabled = true;
+        statusEl.textContent = 'Job en cours…';
+        updateStats(data);
+        data.log.forEach(appendLog);
+        startStream();
+      }
+    });
+
+  btnRun.addEventListener('click', function () {
+    const libs = getSelectedLibraries();
+    if (!libs.length) { statusEl.textContent = 'Sélectionne au moins une bibliothèque.'; return; }
+    const providers = getSelectedProviders();
+    if (!providers.length) { statusEl.textContent = 'Sélectionne au moins un service.'; return; }
+
+    logBox.innerHTML = '';
+    progressFill.style.width = '0%';
+    progressSection.style.display = 'block';
+    btnRun.disabled = true;
+    statusEl.textContent = 'Démarrage…';
+
+    fetch('/tools/label/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ libraries: libs, providers: providers, watch_region: 'CA' }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          statusEl.textContent = '❌ ' + data.error;
+          btnRun.disabled = false;
+        } else {
+          statusEl.textContent = 'En cours…';
+          startStream();
+        }
+      })
+      .catch(err => {
+        statusEl.textContent = '❌ Erreur réseau';
+        btnRun.disabled = false;
+      });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

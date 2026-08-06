@@ -188,7 +188,7 @@ def _guess_series_folder_from_filename(filename):
     return name.strip()
 
 
-def _build_local_path(filename, media_type="movie", ftp_id=None):
+def _build_local_path(filename, media_type="movie", ftp_id=None, season=None, episode=None, series_title=None):
     if not filename:
         raise ValueError("filename manquant")
 
@@ -220,15 +220,27 @@ def _build_local_path(filename, media_type="movie", ftp_id=None):
         raise ValueError("Dossier de téléchargement FTP non configuré.")
 
     if is_show:
-        # 🔍 Extraire infos épisode
-        season, episode, _ = parse_episode_info(filename)
+        # 🔍 Saison/épisode : on fait confiance à l'appelant s'il les connaît déjà
+        # (ex: métadonnées Plex/FTP), sinon on retombe sur la détection par nom de fichier.
+        if season is None or episode is None:
+            guessed_season, guessed_episode, _ = parse_episode_info(filename)
+            if season is None:
+                season = guessed_season
+            if episode is None:
+                episode = guessed_episode
 
-        # 🧠 Nettoyer le nom de série
-        series_name_raw = _guess_series_folder_from_filename(filename)
-        series_name_clean, year = _clean_source_media_guess(series_name_raw)
+        # 🧠 Nom de série : idem, on privilégie le titre déjà connu (Plex) au guess par filename,
+        # car les fichiers du type "Episode 01 <titre episode>.mkv" ne contiennent pas le nom de la série.
+        if series_title and str(series_title).strip():
+            series_name_clean, year = _clean_source_media_guess(str(series_title).strip())
+            if not series_name_clean:
+                series_name_clean = str(series_title).strip()
+        else:
+            series_name_raw = _guess_series_folder_from_filename(filename)
+            series_name_clean, year = _clean_source_media_guess(series_name_raw)
 
-        if not series_name_clean:
-            series_name_clean = series_name_raw or "Série inconnue"
+            if not series_name_clean:
+                series_name_clean = series_name_raw or "Série inconnue"
 
         # 🎬 Ajouter l'année si trouvée
         if year:
@@ -279,7 +291,8 @@ def _get_ftp_config(ftp_id=None):
     }
 
 
-def create_ftp_download_job(remote_path, filename=None, media_type="movie", media_key=None, ftp_id=None):
+def create_ftp_download_job(remote_path, filename=None, media_type="movie", media_key=None, ftp_id=None,
+                             season=None, episode=None, series_title=None):
     effective_media_key = media_key or remote_path
 
     if not remote_path:
@@ -288,7 +301,10 @@ def create_ftp_download_job(remote_path, filename=None, media_type="movie", medi
     if not filename:
         filename = os.path.basename(remote_path.rstrip("/"))
 
-    local_path, final_filename = _build_local_path(filename, media_type, ftp_id=ftp_id)
+    local_path, final_filename = _build_local_path(
+        filename, media_type, ftp_id=ftp_id,
+        season=season, episode=episode, series_title=series_title,
+    )
     ftp_cfg = _get_ftp_config(ftp_id=ftp_id)
     job_id = uuid.uuid4().hex
 
@@ -318,6 +334,56 @@ def create_ftp_download_job(remote_path, filename=None, media_type="movie", medi
 
     logging.getLogger(__name__).debug(f"[FTP QUEUE] appended job_id={job_id} queue={ftp_download_queue}")
     return job_id, queue_position
+
+def create_ftp_download_jobs_batch(items):
+    """
+    Crée un job de téléchargement pour chaque item de la liste.
+    items: liste de dicts {remote_path, filename, media_type, ftp_id, media_key}
+    Retourne (job_ids, errors).
+    """
+    job_ids = []
+    errors = []
+    for it in items or []:
+        try:
+            job_id, _ = create_ftp_download_job(
+                remote_path=it.get("remote_path"),
+                filename=it.get("filename"),
+                media_type=it.get("media_type", "episode"),
+                media_key=it.get("media_key"),
+                ftp_id=it.get("ftp_id") or None,
+                season=it.get("season"),
+                episode=it.get("episode"),
+                series_title=it.get("series_title"),
+            )
+            job_ids.append(job_id)
+        except Exception as e:
+            errors.append(str(e))
+    return job_ids, errors
+
+
+def get_download_status_batch(job_ids):
+    with ftp_download_jobs_lock:
+        queue_positions = {jid: i + 1 for i, jid in enumerate(ftp_download_queue)}
+        statuses = []
+        for job_id in job_ids or []:
+            job_entry = ftp_download_jobs.get(job_id)
+            if not job_entry:
+                statuses.append({"job_id": job_id, "status": "unknown", "progress": 0})
+                continue
+            job = job_entry.get("job", {})
+            statuses.append({
+                "job_id": job_id,
+                "status": job.get("status", "idle"),
+                "progress": job.get("percent", 0),
+                "error": job.get("error"),
+                "queue_position": queue_positions.get(job_id),
+            })
+    return statuses
+
+
+def cancel_ftp_jobs_batch(job_ids):
+    return {job_id: cancel_ftp_job(job_id) for job_id in (job_ids or [])}
+
 
 def cancel_ftp_job(job_id):
     if not job_id:

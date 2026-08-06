@@ -3,11 +3,13 @@ playlist_service.py — Matching Trakt→Plex et création de playlists Plex.
 
 Flux :
   1. Connexion au serveur Plex local (owned=True).
-  2. Construction d'un index TMDB→item depuis toutes les biblio films/séries.
-  3. Matching de chaque item Trakt (TMDB ID d'abord, titre+année en fallback).
+  2. Construction d'un index GUID → item depuis toutes les biblio films/séries
+     (une seule passe, fiable pour l'agent Plex moderne plex://show/…).
+  3. Matching de chaque item Trakt via l'index GUID, puis fallback titre+année.
   4. Création (ou recréation) de la playlist Plex.
 """
 import logging
+import re
 
 from plexapi.myplex import MyPlexAccount
 
@@ -34,106 +36,239 @@ def _get_local_server(plex_token: str):
     return server
 
 
-# ── Index TMDB ────────────────────────────────────────────────────────────────
+# ── Index GUID (scan unique par session de matching) ─────────────────────────
 
-def _build_plex_indexes(plex):
+def _build_guid_index(plex, section_types: set | None = None) -> dict:
     """
-    Parcourt toutes les bibliothèques film/série et construit :
-      tmdb_index        : {tmdb_id (int) → plex_item}
-      title_year_index  : {(titre_normalisé, année_str) → plex_item}
-    """
-    tmdb_index: dict[int, object] = {}
-    title_year_index: dict[tuple, object] = {}
+    Scanne les sections films/séries et construit un dict
+    {guid_string: plex_item} en lisant les GUIDs externes de chaque item
+    (attribut .guids — liste de Guid(id='tvdb://…') sur l'agent Plex moderne).
 
+    Un seul scan par session ; toutes les lookups GUID sont ensuite O(1).
+
+    section_types : set de types à scanner, ex. {"movie"}, {"show"} ou None
+                    pour scanner les deux. Permet d'éviter de scanner toute la
+                    bibliothèque séries quand on cherche seulement des films.
+    """
+    if section_types is None:
+        section_types = {"show", "movie"}
+
+    index: dict = {}
     for section in plex.library.sections():
-        if section.type not in ("movie", "show"):
+        if section.type not in section_types:
             continue
         try:
-            # includeGuids=1 : Plex inclut les GUIDs externes (TMDB, IMDB…) dans la
-            # réponse bulk — évite N+1 requêtes individuelles par item.
-            items = section.all(includeGuids=1)
+            for item in section.all():
+                # GUIDs externes (tvdb, tmdb, imdb, …) — agent Plex moderne
+                for g in getattr(item, "guids", []):
+                    gid = getattr(g, "id", None)
+                    if gid:
+                        index.setdefault(gid, item)
+                # GUID principal (peut être plex:// ou tvdb:// selon l'agent)
+                primary = getattr(item, "guid", None)
+                if primary:
+                    index.setdefault(primary, item)
         except Exception as exc:
-            logger.warning("[PLAYLIST] Erreur chargement biblio '%s': %s", section.title, exc)
-            continue
+            logger.warning("[PLAYLIST] Erreur scan section '%s': %s", section.title, exc)
 
-        for item in items:
-            # --- Index TMDB via .guids (Plex 1.20+) ---
+    logger.info("[PLAYLIST] Index GUID: %d entrées (sections: %s)",
+                len(index), ", ".join(sorted(section_types)))
+    return index
+
+
+def _guid_lookup(index: dict, tmdb_id, imdb_id, tvdb_id):
+    """Cherche dans l'index GUID : TMDB → IMDB → TVDB. Retourne le premier match."""
+    candidates = []
+    if tmdb_id:
+        candidates.append(f"tmdb://{tmdb_id}")
+    if imdb_id:
+        candidates.append(f"imdb://{imdb_id}")
+    if tvdb_id:
+        candidates.append(f"tvdb://{tvdb_id}")
+    for guid in candidates:
+        item = index.get(guid)
+        if item:
+            logger.debug("[PLAYLIST] GUID match '%s' via %s", item.title, guid)
+            return item
+    return None
+
+
+# ── Matching par titre (fallback) ─────────────────────────────────────────────
+
+_VOL_RE  = re.compile(r'\bvolume\b', re.IGNORECASE)
+_THE_RE  = re.compile(r'^(the|les?|l\')\s+', re.IGNORECASE)
+_DIG2WRD = {'1': 'One', '2': 'Two', '3': 'Three', '4': 'Four',
+             '5': 'Five', '6': 'Six', '7': 'Seven', '8': 'Eight', '9': 'Nine'}
+_WRD2DIG = {v.lower(): k for k, v in _DIG2WRD.items()}
+_DIG_RE  = re.compile(r'\b([1-9])\b')
+_WRD_RE  = re.compile(r'\b(one|two|three|four|five|six|seven|eight|nine)\b', re.IGNORECASE)
+
+
+def _title_variants(title: str) -> list[str]:
+    t0 = title.strip()
+
+    def _apply(t):
+        yield t
+        t1 = _VOL_RE.sub("Vol.", t)
+        if t1 != t:
+            yield t1
+        t2 = _DIG_RE.sub(lambda m: _DIG2WRD[m.group(1)], t)
+        if t2 != t:
+            yield t2
+        t3 = _WRD_RE.sub(lambda m: _WRD2DIG[m.group(1).lower()], t)
+        if t3 != t:
+            yield t3
+
+    seen: set[str] = set()
+    result = []
+    for base in [t0, _THE_RE.sub("", t0).strip()]:
+        for v in _apply(base):
+            if v and v not in seen:
+                seen.add(v)
+                result.append(v)
+    return result
+
+
+def _find_by_title(plex, title: str, year, media_type: str):
+    """
+    Fallback titre : cherche par title ET originalTitle, avec variantes.
+    Filtre par année si disponible.
+    """
+    libtype = "movie" if media_type == "movie" else "show"
+    year_str = str(year or "")
+    variants = _title_variants(title)
+
+    for variant in variants:
+        for field in ("title", "originalTitle"):
             try:
-                for guid in item.guids:
-                    gid = guid.id or ""
-                    if gid.startswith("tmdb://"):
-                        try:
-                            tmdb_id = int(gid.replace("tmdb://", "").split("?")[0])
-                            tmdb_index.setdefault(tmdb_id, item)
-                        except ValueError:
-                            pass
+                results = plex.library.search(libtype=libtype, **{field: variant})
             except Exception:
-                pass
+                continue
+            if not results:
+                continue
+            if year_str:
+                for r in results:
+                    if str(getattr(r, "year", "")) == year_str:
+                        return r
+            return results[0]
 
-            # --- Index titre+année (fallback) ---
-            title = (getattr(item, "title", "") or "").strip()
-            orig  = (getattr(item, "originalTitle", "") or "").strip()
-            year  = str(getattr(item, "year", "") or "")
+    return None
 
-            for t in {title, orig}:
-                if not t:
-                    continue
-                for key in [(t.lower(), year), (normalize_name(t), year),
-                             (t.lower(), ""),  (normalize_name(t), "")]:
-                    title_year_index.setdefault(key, item)
 
-    logger.info(
-        "[PLAYLIST] Index construit — %d TMDB, %d titre/année",
-        len(tmdb_index), len(title_year_index),
+# ── Helpers show parent ───────────────────────────────────────────────────────
+
+def _find_show(plex, item: dict, guid_index: dict):
+    """Trouve la série parente via l'index GUID, puis fallback titre."""
+    show = _guid_lookup(
+        guid_index,
+        tmdb_id=item.get("show_tmdb_id"),
+        imdb_id=item.get("show_imdb_id"),
+        tvdb_id=item.get("show_tvdb_id"),
     )
-    return tmdb_index, title_year_index
+    if not show:
+        show = _find_by_title(plex, item.get("show_title", ""), item.get("year"), "show")
+    return show
 
 
-# ── Matching ──────────────────────────────────────────────────────────────────
+# ── Finders épisode / saison ──────────────────────────────────────────────────
+
+def _find_season(plex, item: dict, guid_index: dict):
+    season_num = item.get("season")
+    if season_num is None:
+        return None
+
+    show = _find_show(plex, item, guid_index)
+    if not show:
+        return None
+
+    try:
+        return show.season(season=season_num)
+    except Exception:
+        pass
+    try:
+        for s in show.seasons():
+            if s.index == season_num:
+                return s
+    except Exception:
+        pass
+    return None
+
+
+def _find_episode(plex, item: dict, guid_index: dict):
+    season = item.get("season")
+    number = item.get("episode")
+    if season is None or number is None:
+        return None
+
+    show = _find_show(plex, item, guid_index)
+    if not show:
+        return None
+
+    try:
+        return show.episode(season=season, episode=number)
+    except Exception:
+        pass
+    try:
+        for ep in show.episodes():
+            if ep.seasonNumber == season and ep.index == number:
+                return ep
+    except Exception:
+        pass
+    return None
+
+
+# ── Matching principal ────────────────────────────────────────────────────────
 
 def match_trakt_items(plex, trakt_items: list) -> dict:
     """
     Match a list of normalized Trakt items against the Plex library.
 
+    Construit d'abord un index GUID complet (un seul scan des bibliothèques),
+    puis matche chaque item via l'index (O(1)) avec fallback titre+année.
+
     Returns:
         {
-            "matched":   [{"trakt": ..., "plex": plex_item}, ...],
-            "unmatched": [trakt_item, ...],
+            "matched":   [{"trakt": …, "plex": plex_item}, …],
+            "unmatched": [trakt_item, …],
         }
     """
-    tmdb_index, title_year_index = _build_plex_indexes(plex)
-    matched = []
+    guid_index = _build_guid_index(plex)
+
+    matched   = []
     unmatched = []
 
     for item in trakt_items:
-        plex_item = None
+        plex_item  = None
+        media_type = item.get("type", "movie")
 
-        # 1. TMDB ID
-        tmdb_id = item.get("tmdb_id")
-        if tmdb_id:
-            plex_item = tmdb_index.get(int(tmdb_id))
+        if media_type == "episode":
+            plex_item = _find_episode(plex, item, guid_index)
 
-        # 2. Titre + année (fallback)
-        if not plex_item:
-            title = (item.get("title") or "").strip()
-            year  = str(item.get("year") or "")
-            norm  = normalize_name(title)
-            plex_item = (
-                title_year_index.get((title.lower(), year))
-                or title_year_index.get((norm, year))
-                or title_year_index.get((title.lower(), ""))
-                or title_year_index.get((norm, ""))
+        elif media_type == "season":
+            plex_item = _find_season(plex, item, guid_index)
+
+        else:
+            # Films et séries : GUID d'abord, titre+année en fallback
+            plex_item = _guid_lookup(
+                guid_index,
+                tmdb_id=item.get("tmdb_id"),
+                imdb_id=item.get("imdb_id"),
+                tvdb_id=item.get("tvdb_id"),
             )
+            if not plex_item:
+                plex_item = _find_by_title(
+                    plex,
+                    title=item.get("title") or "",
+                    year=item.get("year"),
+                    media_type=media_type,
+                )
 
         if plex_item:
             matched.append({"trakt": item, "plex": plex_item})
         else:
             unmatched.append(item)
 
-    logger.info(
-        "[PLAYLIST] Matching — %d/%d trouvés",
-        len(matched), len(trakt_items),
-    )
+    logger.info("[PLAYLIST] Matching — %d/%d trouvés", len(matched), len(trakt_items))
     return {"matched": matched, "unmatched": unmatched}
 
 
@@ -144,7 +279,6 @@ def create_or_update_playlist(plex, name: str, plex_items: list):
     Supprime la playlist existante du même nom (si présente) et en crée une nouvelle.
     Retourne l'objet playlist créé, ou None si plex_items est vide.
     """
-    # Supprimer l'ancienne version
     try:
         existing = plex.playlist(name)
         existing.delete()
@@ -166,16 +300,6 @@ def create_or_update_playlist(plex, name: str, plex_items: list):
 def import_trakt_to_plex(plex_token: str, playlist_name: str, trakt_items: list) -> dict:
     """
     Pipeline complet : matching Trakt→Plex + création playlist.
-
-    Returns un rapport :
-        {
-            "matched":        [{trakt, plex}, ...],
-            "unmatched":      [trakt_item, ...],
-            "matched_count":  int,
-            "unmatched_count": int,
-            "playlist_name":  str,
-            "playlist_key":   str | None,
-        }
     """
     plex   = _get_local_server(plex_token)
     report = match_trakt_items(plex, trakt_items)
@@ -183,8 +307,8 @@ def import_trakt_to_plex(plex_token: str, playlist_name: str, trakt_items: list)
     plex_items = [m["plex"] for m in report["matched"]]
     playlist   = create_or_update_playlist(plex, playlist_name, plex_items)
 
-    report["playlist_name"]   = playlist_name
-    report["playlist_key"]    = str(getattr(playlist, "ratingKey", "") or "") or None
-    report["matched_count"]   = len(report["matched"])
-    report["unmatched_count"] = len(report["unmatched"])
+    report["playlist_name"]    = playlist_name
+    report["playlist_key"]     = str(getattr(playlist, "ratingKey", "") or "") or None
+    report["matched_count"]    = len(report["matched"])
+    report["unmatched_count"]  = len(report["unmatched"])
     return report

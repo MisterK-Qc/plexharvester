@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import logging
 import shutil
 import subprocess
 import time
@@ -97,7 +98,6 @@ def normalize_service_tag(name: str) -> str:
         name = pattern.sub(tag, name)
     return name
 
-
 class MKVCancelledError(Exception):
     pass
 
@@ -107,6 +107,134 @@ def fix_permissions(path: str):
         subprocess.run(["chown", "nobody:users", path], check=False)
     except Exception as e:
         print(f"[PERMS] erreur sur {path}: {e}")
+
+
+_mkv_log = logging.getLogger(__name__)
+
+
+def _resolve_series_folder_name(dst_dir: str, series_name: str, stem: str) -> str:
+    """
+    Détermine le nom de dossier série "Nom (Année)" à utiliser. Priorité :
+    1) le nom a déjà une année (Plex ou détection antérieure) → inchangé ;
+    2) un dossier "Nom (Année)" existe déjà sous dst_dir → le réutiliser, pour que
+       toutes les saisons tombent dans le même dossier, quelle que soit l'année
+       embarquée dans le nom du fichier de la saison en cours (souvent l'année de
+       diffusion de la saison, pas celle de la série) ;
+    3) sinon, résoudre l'année de première diffusion via TMDB ;
+    4) à défaut (pas de clé TMDB, série introuvable...), repli sur l'année trouvée
+       dans le nom du fichier source.
+    """
+    if re.search(r'\(\d{4}\)', series_name):
+        return series_name
+
+    try:
+        for entry in os.listdir(dst_dir):
+            if re.match(re.escape(series_name) + r'\s*\(\d{4}\)$', entry):
+                return entry
+    except OSError:
+        pass
+
+    try:
+        from app.services.config_service import load_config
+        from app.services import rename_scene_service as _rss
+
+        cfg = load_config()
+        tmdb_key = cfg.get("TMDB_API_KEY", "")
+        if tmdb_key:
+            _rss.TMDB_API_KEY = tmdb_key
+            tmdb_id, _ = _rss.tmdb_search(series_name, None, is_series=True)
+            if tmdb_id:
+                year = _rss._fetch_tmdb_year(tmdb_id, "tv")
+                if year:
+                    return f"{series_name} ({year})"
+    except Exception as e:
+        _mkv_log.warning("[series folder] TMDB year lookup failed: %s", e)
+
+    _yr = re.search(r'\((\d{4})\)', stem)
+    if _yr:
+        return f"{series_name} ({_yr.group(1)})"
+    return series_name
+
+
+def _apply_scene_name(src_file: str, dst_file: str, team: str = "MKQC") -> str:
+    """
+    Rename dst_file using the scene naming convention from rename_scene_service.
+    Uses MediaInfo on the remuxed output and service detection on the source path.
+    Returns the final file path.
+    """
+    try:
+        from app.services import rename_scene_service as _rss
+
+        src_stem = os.path.splitext(os.path.basename(src_file))[0]
+        dst_dir  = os.path.dirname(dst_file)
+
+        # Parse source filename → title, SxxExx, ep_title, year, edition…
+        title, ep_tag, year, ep_title, edition, subtitle, team_name = \
+            _rss.parse_original_name(src_stem)
+
+        # MediaInfo on the remuxed file (real codec/resolution after remux)
+        mi = _rss.get_media_info(dst_file)
+        if not mi:
+            _mkv_log.warning("[scene rename] MediaInfo unavailable for %s",
+                             os.path.basename(dst_file))
+            return dst_file
+
+        resolution     = mi.get("resolution")     or "1080p"
+        video_codec    = mi.get("video_codec")    or "H265"
+        audio_codec    = mi.get("audio_codec")    or "EAC3"
+        audio_channels = mi.get("audio_channels") or "5.1"
+        hdr            = mi.get("hdr")
+
+        # Detect streaming service from the source path (has original StreamFab tags)
+        service = _rss.detect_service_from_name(src_file, mi)
+        source  = None
+        if service:
+            source = "WEBRip" if service in ("YT", "TUBI", "PLUTO", "GEM", "CTV") \
+                     else "WEB-DL"
+
+        # Infer from codec/hdr when service unknown
+        if not service and not source:
+            inf_svc, inf_src, confidence, _, _ = _rss.infer_from_codec(mi)
+            if confidence in ("certain", "high", "medium"):
+                service, source = inf_svc, inf_src
+
+        if not source:
+            source = "WEB-DL"
+
+        lang_tag = _rss.detect_audio_language_tag(
+            mi.get("audio_tracks", []), mi.get("sub_tracks", [])
+        )
+
+        new_stem = _rss.build_scene_name(
+            title=title, episode_tag=ep_tag, ep_title=ep_title,
+            resolution=resolution, service=service, source=source,
+            video_codec=video_codec, audio_codec=audio_codec,
+            audio_channels=audio_channels, hdr=hdr, team=None,
+            lang_tag=lang_tag, edition=edition, subtitle=subtitle,
+            team_name=(team or team_name),
+        )
+        if len(new_stem) > 180:
+            new_stem = new_stem[:180].rstrip()
+
+        new_filename = to_safe_filename(new_stem) + ".mkv"
+        new_path     = os.path.join(dst_dir, new_filename)
+
+        if os.path.normpath(dst_file) != os.path.normpath(new_path):
+            if os.path.exists(new_path):
+                _mkv_log.warning("[scene rename] Target exists, skipping: %s", new_filename)
+            else:
+                os.rename(dst_file, new_path)
+                fix_permissions(new_path)
+                _mkv_log.info("[scene rename] %s → %s",
+                              os.path.basename(dst_file), new_filename)
+                dst_file = new_path
+
+        return dst_file
+
+    except Exception as e:
+        _mkv_log.warning("[scene rename] Failed: %s", e, exc_info=True)
+        return dst_file
+
 
 def get_mkvtoolnix_binaries(config) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -173,7 +301,11 @@ def is_unc_path(path: str) -> bool:
 
 
 def to_safe_filename(name: str) -> str:
-    return re.sub(r'[<>:"/\\|?*]+', "-", name).strip()
+    # Colon → spaced dash (cleaner than underscore, readable in Plex)
+    name = re.sub(r'\s*:\s*', ' - ', name)
+    # Remove remaining Windows-forbidden chars (accents are kept)
+    name = re.sub(r'[<>"/\\|?*]', '', name)
+    return name.strip()
 
 
 def to_win32_safe_path(path: str) -> str:
@@ -374,6 +506,116 @@ def parse_episode_info(filename: str) -> Tuple[Optional[int], Optional[int], str
 
     return None, None, base
 
+# ── Edition detection ────────────────────────────────────────────────────────
+# Multi-word patterns first (most specific), then single-word
+_EDITION_PATTERNS: List[Tuple] = [
+    (re.compile(r"(?i)\bUltimate[\s._-]+Director[s]?[\s._-]*'?s?[\s._-]*Cut\b"), "Ultimate Director's Cut"),
+    (re.compile(r"(?i)\bUnrated[\s._-]+(?:Director[s]?[\s._-]*'?s?[\s._-]*Cut|DC)\b"),  "Unrated Director's Cut"),
+    (re.compile(r"(?i)\bUnrated[\s._-]+Producer[s]?[\s._-]*'?s?[\s._-]*Cut\b"),          "Unrated Producer's Cut"),
+    (re.compile(r"(?i)\bDirector[s]?[\s._-]*'?s?[\s._-]*Cut\b"),                         "Director's Cut"),
+    (re.compile(r"(?i)\bExtended[\s._-]+(?:Cut|Edition|Version|Remaster(?:ed)?)\b"),     "Extended Edition"),
+    (re.compile(r"(?i)\bTheatrical[\s._-]+(?:Cut|Edition|Version)\b"),                   "Theatrical Edition"),
+    (re.compile(r"(?i)\bSpecial[\s._-]+Edition\b"),                                      "Special Edition"),
+    (re.compile(r"(?i)\bUltimate[\s._-]+Edition\b"),                                     "Ultimate Edition"),
+    (re.compile(r"(?i)\bAnniversary[\s._-]+Edition\b"),                                  "Anniversary Edition"),
+    (re.compile(r"(?i)\bFinal[\s._-]+Cut\b"),                                            "Final Cut"),
+    (re.compile(r"(?i)\bMinus[\s._-]+Colou?r\b"),                                        "Minus Color"),
+    (re.compile(r"(?i)\bFan[\s._-]*Edit\b"),                                             "Fan Edit"),
+    (re.compile(r"(?i)\bInternational[\s._-]+(?:Cut|Version)\b"),                        "International Cut"),
+    (re.compile(r"(?i)\bExtended\b"),                                                    "Extended Edition"),
+    (re.compile(r"(?i)\bTheatrical\b"),                                                  "Theatrical Edition"),
+    (re.compile(r"(?i)\bUnrated\b"),                                                     "Unrated"),
+    (re.compile(r"(?i)\bRemaster(?:ed)?\b"),                                             "Remastered"),
+    (re.compile(r"(?i)\bRedux\b"),                                                       "Redux"),
+    (re.compile(r"(?i)\bUncut\b"),                                                       "Uncut"),
+    (re.compile(r"(?i)\bIMAX\b"),                                                        "IMAX"),
+    (re.compile(r"(?i)\bColorize[d]?\b"),                                                "Colorized"),
+]
+
+# Scene-release technical tokens — stop title extraction here
+_SCENE_STOP_RE = re.compile(
+    r"(?i)\b("
+    r"2160p|4K|1080p|720p|480p|576p|"
+    r"WEB[.\-]?DL|WEBRip|WEB|BluRay|BDRip|BRRip|DVDRip|DVDScr|HDRip|Remux|HDTV|"
+    r"x264|x265|h264|h265|HEVC|AVC|AV1|VP9|"
+    r"AAC|AC3|DTS|DD5\.1|DDP5\.1|EAC3|Atmos|TrueHD|"
+    r"FRENCH|VFF|VFQ|VF2|MULTI|TRUEFRENCH|SUBFRENCH|"
+    r"PROPER|REPACK|COMPLETE|DUBBED|"
+    r"HDR10?|SDR|DV|"
+    r"AMZN|NF|DSNP|ATVP|HMAX|HULU|PMTP|PCOK|CRAV|ILCO|TUBI|MUBI|NOOVO|TOUTV|"
+    r"Netflix|Amazon|Disney\+|AppleTV|HBO"
+    r")\b"
+)
+
+
+def _extract_edition(stem: str) -> Tuple[str, str]:
+    """
+    Detect and extract edition info from a filename stem.
+    Checks bracketed editions first [Director's Cut], then known scene keywords.
+    Returns (stem_without_edition, edition_name).
+    edition_name is an empty string when no edition is found.
+    """
+    def _clean(s: str) -> str:
+        s = re.sub(r"\.\.+", ".", s)   # collapse double dots (scene releases)
+        return s.strip(" -._")
+
+    # Bracketed edition [Something] — use content verbatim
+    m = re.search(r"\[([^\]]+)\]", stem)
+    if m:
+        return _clean(stem[:m.start()] + stem[m.end():]), m.group(1).strip()
+
+    # Scene-style / title-embedded keywords
+    for pattern, edition_name in _EDITION_PATTERNS:
+        m = pattern.search(stem)
+        if m:
+            return _clean(stem[:m.start()] + stem[m.end():]), edition_name
+
+    return stem, ""
+
+
+def _clean_movie_stem_for_plex(stem: str) -> Tuple[str, Optional[int]]:
+    """
+    Convert a scene-release or already-clean stem to (clean_title, year).
+    Examples:
+      "Halloween.Kills.2021.FRENCH.1080p.WEBRip.x264-Group" -> ("Halloween Kills", 2021)
+      "A Christmas Carol (2009)"                             -> ("A Christmas Carol", 2009)
+      "Rebel Moon — Part One_ (2023)"                       -> ("Rebel Moon Part One", 2023)
+    """
+    txt = stem.replace(".", " ").replace("_", " ").replace("—", " ").replace("–", " ")
+    txt = re.sub(r"\s+-\s+", " ", txt)       # " - " separator → space
+    txt = re.sub(r"(?<!\s)-(?!\s)", " ", txt) # "x264-Group" → "x264 Group"
+
+    # Find year — prefer parenthesized form to avoid treating title numbers as year
+    # e.g. "1917 (2019)" → year=2019, not 1917
+    year: Optional[int] = None
+    m_paren = re.search(r"\((19\d{2}|20\d{2})\)", txt)
+    if m_paren:
+        try:
+            year = int(m_paren.group(1))
+        except Exception:
+            year = None
+    if year is None:
+        m_bare = re.search(r"\b(19\d{2}|20\d{2})\b", txt)
+        if m_bare:
+            try:
+                year = int(m_bare.group(1))
+            except Exception:
+                year = None
+
+    # Cut at first technical/scene stop keyword (only if there's title content before it)
+    stop = _SCENE_STOP_RE.search(txt)
+    if stop and stop.start() > 2:
+        txt = txt[:stop.start()]
+
+    # Remove year (with surrounding parens if present, then bare)
+    if year:
+        txt = re.sub(rf"\({year}\)", " ", txt)
+        txt = re.sub(rf"\b{year}\b", " ", txt)
+
+    txt = re.sub(r"\s+", " ", txt).strip(" -._")
+    return txt, year
+
+
 def build_destination_path(
     src_file: str,
     src_root: str,
@@ -386,7 +628,15 @@ def build_destination_path(
     filename = normalize_service_tag(stem) + ext
 
     if not is_series_category:
-        return os.path.join(dst_dir, to_safe_filename(filename))
+        stem_clean, edition = _extract_edition(stem)
+        # Normalize extra spaces left after edition removal, then apply service tag map
+        stem_clean = re.sub(r"\s{2,}", " ", stem_clean).strip(" -._")
+        stem_normalized = normalize_service_tag(stem_clean)
+        if edition:
+            out_stem = stem_normalized + " {edition-" + edition + "}"
+        else:
+            out_stem = normalize_service_tag(stem)
+        return os.path.join(dst_dir, to_safe_filename(out_stem) + ".mkv")
 
     # Priorité absolue : nom propre venant de Plex
     series_name = (forced_series_name or "").strip()
@@ -407,6 +657,8 @@ def build_destination_path(
                 or infer_series_name_from_rel(src_root_name)
                 or "Série inconnue"
             )
+
+    series_name = _resolve_series_folder_name(dst_dir, series_name, stem)
 
     season, episode, ep_title = parse_episode_info(filename)
 
@@ -539,11 +791,15 @@ def remux_file(
     language_overrides: dict = None,
 ) -> None:
     parent_dir = os.path.dirname(dst_file)
+    # Collect dirs that don't exist yet so we can fix permissions on each after makedirs
+    _new_dirs: list[str] = []
+    _p = parent_dir
+    while _p and _p != os.path.dirname(_p) and not os.path.exists(_p):
+        _new_dirs.append(_p)
+        _p = os.path.dirname(_p)
     os.makedirs(parent_dir, exist_ok=True)
-    try:
-        os.chmod(parent_dir, 0o777)
-    except Exception:
-        pass
+    for _d in (reversed(_new_dirs) if _new_dirs else [parent_dir]):
+        fix_permissions(_d)
 
     safe_src = to_win32_safe_path(src_file)
     safe_dst = to_win32_safe_path(dst_file)
@@ -777,6 +1033,9 @@ def remux_file(
         parent_dir = os.path.dirname(dst_file)
         if parent_dir and os.path.isdir(parent_dir):
             fix_permissions(parent_dir)
+
+        # Renommage scène + année dossier série
+        _apply_scene_name(src_file, dst_file)
 
     except MKVCancelledError:
         if os.path.exists(dst_file):

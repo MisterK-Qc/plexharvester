@@ -111,26 +111,92 @@ def fetch_special_list(client_id: str, media_type: str, kind: str) -> list:
 
 def normalize_items(raw_items: list) -> list[dict]:
     """
-    Convert raw Trakt API items to normalized dicts:
-    {type, title, year, tmdb_id, imdb_id, trakt_id, slug}
-    Only 'movie' and 'show' types are kept.
+    Convert raw Trakt API items to normalized dicts.
+    Handles: movie, show, season, episode.
     """
-    result = []
+    result: list[dict] = []
+    skipped_types: dict[str, int] = {}
+
     for raw in raw_items:
         media_type = raw.get("type")
-        if media_type not in ("movie", "show"):
-            continue
-        media = raw.get(media_type, {})
-        ids = media.get("ids", {})
-        result.append({
-            "type":     media_type,
-            "title":    media.get("title", ""),
-            "year":     media.get("year"),
-            "tmdb_id":  ids.get("tmdb"),
-            "imdb_id":  ids.get("imdb"),
-            "trakt_id": ids.get("trakt"),
-            "slug":     ids.get("slug", ""),
-        })
+
+        if media_type in ("movie", "show"):
+            media = raw.get(media_type, {})
+            ids   = media.get("ids", {})
+            result.append({
+                "type":     media_type,
+                "title":    media.get("title", ""),
+                "year":     media.get("year"),
+                "tmdb_id":  ids.get("tmdb"),
+                "imdb_id":  ids.get("imdb"),
+                "tvdb_id":  ids.get("tvdb"),
+                "trakt_id": ids.get("trakt"),
+                "slug":     ids.get("slug", ""),
+            })
+
+        elif media_type == "season":
+            # Saison entière : Arrow S1, Arrow S2, etc.
+            show      = raw.get("show", {})
+            show_ids  = show.get("ids", {})
+            season    = raw.get("season", {})
+            season_ids = season.get("ids", {})
+            result.append({
+                "type":         "season",
+                "title":        show.get("title", ""),   # titre de la série
+                "show_title":   show.get("title", ""),
+                "year":         show.get("year"),
+                "season":       season.get("number"),
+                "tmdb_id":      season_ids.get("tmdb"),
+                "tvdb_id":      season_ids.get("tvdb"),
+                "trakt_id":     season_ids.get("trakt"),
+                "imdb_id":      None,
+                # IDs de la série parente
+                "show_tmdb_id": show_ids.get("tmdb"),
+                "show_tvdb_id": show_ids.get("tvdb"),
+                "show_imdb_id": show_ids.get("imdb"),
+                "slug":         show_ids.get("slug", ""),
+            })
+
+        elif media_type == "episode":
+            # Conserver chaque épisode individuellement (ordre de la liste préservé)
+            show     = raw.get("show", {})
+            show_ids = show.get("ids", {})
+            ep       = raw.get("episode", {})
+            ep_ids   = ep.get("ids", {})
+            result.append({
+                "type":         "episode",
+                "title":        ep.get("title", ""),
+                "show_title":   show.get("title", ""),
+                "year":         show.get("year"),
+                "season":       ep.get("season"),
+                "episode":      ep.get("number"),
+                # IDs de l'épisode (pour matching futur)
+                "tmdb_id":      ep_ids.get("tmdb"),
+                "imdb_id":      ep_ids.get("imdb"),
+                "tvdb_id":      ep_ids.get("tvdb"),
+                "trakt_id":     ep_ids.get("trakt"),
+                # IDs de la série parente (pour trouver la série dans Plex)
+                "show_tmdb_id": show_ids.get("tmdb"),
+                "show_tvdb_id": show_ids.get("tvdb"),
+                "show_imdb_id": show_ids.get("imdb"),
+                "slug":         show_ids.get("slug", ""),
+            })
+
+        else:
+            skipped_types[media_type or "unknown"] = skipped_types.get(media_type or "unknown", 0) + 1
+
+    if skipped_types:
+        logger.debug("[TRAKT] Types ignorés : %s", skipped_types)
+
+    logger.debug(
+        "[TRAKT] normalize_items : %d entrées → %d items (movies=%d, shows=%d, seasons=%d, episodes=%d)",
+        len(raw_items),
+        len(result),
+        sum(1 for i in result if i["type"] == "movie"),
+        sum(1 for i in result if i["type"] == "show"),
+        sum(1 for i in result if i["type"] == "season"),
+        sum(1 for i in result if i["type"] == "episode"),
+    )
     return result
 
 

@@ -5,13 +5,40 @@
 
 {% block head %}
 <style>
+  /* ── Saved playlists ── */
+  .pl-saved-section {
+    max-width: 780px; margin: 1rem 0 0;
+  }
+  .pl-saved-toggle {
+    display: flex; align-items: center; gap: .5rem; cursor: pointer;
+    font-size: .85rem; color: var(--muted); user-select: none;
+    padding: .4rem 0;
+  }
+  .pl-saved-toggle:hover { color: var(--fg); }
+  .pl-saved-toggle .pl-saved-arrow { transition: transform .2s; }
+  .pl-saved-toggle.open .pl-saved-arrow { transform: rotate(90deg); }
+  .pl-saved-list {
+    display: none; margin-top: .4rem;
+    background: var(--bg-elev-1); border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden;
+  }
+  .pl-saved-row {
+    display: flex; align-items: center; gap: .6rem; padding: .45rem .75rem;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.05));
+    font-size: .85rem;
+  }
+  .pl-saved-row:last-child { border-bottom: none; }
+  .pl-saved-name { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl-saved-meta { font-size: .75rem; color: var(--muted); white-space: nowrap; }
+
+  /* ── Form card ── */
   .pl-form-card {
     background: var(--bg-elev-1);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 1.25rem 1.5rem;
-    max-width: 680px;
-    margin: 1.5rem 0;
+    max-width: 780px;
+    margin: .75rem 0 0;
   }
   .pl-form-card > * + * { margin-top: .85rem; }
   .pl-form-row { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
@@ -19,15 +46,13 @@
   .pl-form-row label { display: block; margin-bottom: .25rem; font-size: .85rem; color: var(--muted); }
   .pl-form-row input { width: 100%; }
 
-  #pl-result { margin-top: 1.5rem; }
-  .pl-stats {
-    display: flex; gap: 1.5rem; flex-wrap: wrap;
-    margin-bottom: 1rem; font-size: .9rem;
-  }
+  #pl-result { margin-top: 1.5rem; max-width: 900px; }
+  .pl-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
   .pl-stat { display: flex; flex-direction: column; align-items: center; }
   .pl-stat-num { font-size: 2rem; font-weight: 700; line-height: 1; }
   .pl-stat-num.ok   { color: #4caf50; }
   .pl-stat-num.warn { color: #ffcc66; }
+  .pl-stat-num.pend { color: #ffa726; }
   .pl-stat-label { font-size: .75rem; color: var(--muted); margin-top: .15rem; }
 
   .pl-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: .75rem; }
@@ -41,13 +66,83 @@
   .pl-panel { display: none; }
   .pl-panel.active { display: block; }
 
+  /* ── Table items ── */
   .pl-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
   .pl-table th { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; }
-  .pl-table td { padding: .35rem .6rem; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.06)); vertical-align: top; }
+  .pl-table td { padding: .3rem .6rem; border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.05)); vertical-align: middle; }
   .pl-table tr:last-child td { border-bottom: none; }
-  .pl-badge-movie { background: #1565c0; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; }
-  .pl-badge-show  { background: #4a148c; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; }
+  .pl-table tr.pl-ep-row { background: rgba(255,255,255,.02); }
+  .pl-table tr.pl-ep-row td { padding: .2rem .6rem .2rem 2rem; font-size: .8rem; color: var(--muted); }
+  .pl-table tr.pl-pending-row { opacity: .65; }
+
+  .pl-badge-movie   { background: #1565c0; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+  .pl-badge-show    { background: #4a148c; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+  .pl-badge-episode { background: #00695c; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; white-space: nowrap; font-family: monospace; }
+  .pl-badge-pending { background: #e65100; color: #fff; font-size: .72rem; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
   .pl-muted { color: var(--muted); font-style: italic; }
+
+  .pl-expand-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: .85rem; padding: 0 .25rem; line-height: 1;
+  }
+  .pl-expand-btn:hover { color: var(--accent, #e5a00d); }
+
+  .pl-flatten-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: .85rem; padding: 0 .25rem; opacity: .6;
+  }
+  .pl-flatten-btn:hover { color: var(--accent, #e5a00d); opacity: 1; }
+
+  .pl-link-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: .8rem; padding: 0 .25rem; opacity: .55;
+  }
+  .pl-link-btn:hover, .pl-link-btn.pl-link-btn-active { color: #64b5f6; opacity: 1; }
+  tr.pl-link-row td { background: rgba(100,181,246,.04); border-bottom: 1px solid rgba(100,181,246,.15); }
+
+  .pl-remove-btn {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: .8rem; padding: 0 .25rem; opacity: .6;
+  }
+  .pl-remove-btn:hover { color: #e53935; opacity: 1; }
+
+  /* ── Drag-and-drop ── */
+  .pl-drag-handle {
+    cursor: grab; color: var(--muted); font-size: 1.1rem;
+    padding: 0 .4rem; opacity: .35; user-select: none; line-height: 1;
+  }
+  .pl-drag-handle:active { cursor: grabbing; }
+  tr.pl-item-row:hover .pl-drag-handle { opacity: .8; }
+  tr.pl-item-row.pl-dragging { opacity: .35; background: rgba(255,255,255,.03); }
+  tr.pl-item-row.pl-drag-over-top    { box-shadow: inset 0 2px 0 0 var(--accent, #e5a00d); }
+  tr.pl-item-row.pl-drag-over-bottom { box-shadow: inset 0 -2px 0 0 var(--accent, #e5a00d); }
+
+  /* ── Ajout manuel ── */
+  .pl-manual-section {
+    margin-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+  .pl-manual-section h3 { font-size: .9rem; margin: 0 0 .6rem; }
+  .pl-search-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .pl-search-row input { flex: 1 1 200px; }
+  .pl-search-row select { padding: 6px 8px; font-size: .85rem; }
+  .pl-search-results { margin-top: .5rem; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .pl-search-result-row {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .35rem .75rem; cursor: pointer; font-size: .85rem;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.05));
+  }
+  .pl-search-result-row:last-child { border-bottom: none; }
+  .pl-search-result-row:hover { background: rgba(255,255,255,.05); }
+
+  /* ── Reserve btn (Introuvables) ── */
+  .pl-reserve-btn {
+    background: none; border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 6px; font-size: .75rem; cursor: pointer; color: var(--muted);
+    white-space: nowrap;
+  }
+  .pl-reserve-btn:hover { color: #ffa726; border-color: #ffa726; }
 
   .pl-spinner {
     display: inline-block; width: 18px; height: 18px;
@@ -65,6 +160,22 @@
 
 <main style="padding: 0 1rem 2rem;">
 
+  <!-- ── Playlists sauvegardées ── -->
+  <div class="pl-saved-section">
+    <div style="display:flex;align-items:center;gap:.75rem;">
+      <div class="pl-saved-toggle" id="pl-saved-toggle" style="flex:1 1 auto;">
+        <span class="pl-saved-arrow">▶</span>
+        <strong>{{ t("playlist.saved_title") }}</strong>
+        <span id="pl-saved-count" style="color:var(--muted);font-size:.8rem;"></span>
+      </div>
+      <button id="pl-sync-now-btn" class="button-secondary" style="padding:2px 10px;font-size:.8rem;white-space:nowrap;" title="Vérifier maintenant les placeholders de toutes les playlists">
+        ↻ Sync
+      </button>
+    </div>
+    <div class="pl-saved-list" id="pl-saved-list"></div>
+  </div>
+
+  <!-- ── Formulaire ── -->
   <div class="pl-form-card">
     {% if not trakt_client_id %}
     <div class="warning-box" style="margin-bottom:.75rem;">
@@ -97,11 +208,24 @@
     <input type="hidden" id="pl-client-id" value="">
     {% endif %}
 
-    <div style="margin-top: .5rem;">
-      <button class="button-primary" id="pl-import-btn" {% if not trakt_client_id %}disabled{% endif %}>
-        {{ t("playlist.import_btn") }}
+    <div style="margin-top:.5rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
+      <button class="button-primary" id="pl-preview-btn" {% if not trakt_client_id %}disabled{% endif %}>
+        {{ t("playlist.preview_btn") }}
       </button>
-      <span id="pl-status" style="margin-left:.75rem; font-size:.85rem;"></span>
+      <button class="button-secondary" id="pl-scratch-btn">
+        {{ t("playlist.scratch_btn") }}
+      </button>
+      <button class="button-secondary" id="pl-import-plex-btn">
+        {{ t("playlist.import_plex_btn") }}
+      </button>
+      <button class="button-secondary" id="pl-push-btn" style="display:none;">
+        {{ t("playlist.push_btn") }}
+      </button>
+      <span id="pl-status" style="font-size:.85rem;"></span>
+    </div>
+    <!-- Dropdown playlists Plex -->
+    <div id="pl-import-plex-panel" style="display:none; margin-top:.6rem; background:var(--bg-elev-2); border:1px solid var(--border); border-radius:6px; overflow:hidden; max-height:260px; overflow-y:auto;">
+      <div id="pl-import-plex-list"><span class="pl-spinner" style="margin:.75rem;"></span></div>
     </div>
   </div>
 
@@ -113,167 +237,1086 @@
 {% block scripts %}
 <script>
 (function () {
-  const btn      = document.getElementById('pl-import-btn');
-  const urlInput = document.getElementById('pl-url');
-  const nameInput = document.getElementById('pl-name');
-  const cidInput = document.getElementById('pl-client-id');
-  const statusEl = document.getElementById('pl-status');
-  const resultEl = document.getElementById('pl-result');
+  const previewBtn = document.getElementById('pl-preview-btn');
+  const scratchBtn = document.getElementById('pl-scratch-btn');
+  const pushBtn    = document.getElementById('pl-push-btn');
+  const urlInput   = document.getElementById('pl-url');
+  const nameInput  = document.getElementById('pl-name');
+  const cidInput   = document.getElementById('pl-client-id');
+  const statusEl   = document.getElementById('pl-status');
+  const resultEl   = document.getElementById('pl-result');
 
-  // Enable the button once a Client ID is typed (if initially disabled)
-  if (cidInput) {
-    cidInput.addEventListener('input', () => {
-      btn.disabled = !cidInput.value.trim();
-    });
+  // State
+  let _items       = [];   // [{key, title, year, type, plex_title, checked, available, tmdb_id, imdb_id, tvdb_id, episodes, ep_keys, season, episode_num, show_title}]
+  let _unmatched   = [];
+  let _listName    = '';
+  let _traktUrl    = '';
+  let _total       = 0;
+  let _hideUnmatched  = false;  // true en mode manuel/chargement
+  let _nameAutoFilled = false;  // true si le nom vient de Trakt/Plex (pas saisi manuellement)
+  let _linkIdx        = null;   // index de l'item en cours de liaison manuelle
+
+  // Drag state
+  let _dragIdx = null;
+
+  if (cidInput && cidInput.type === 'text') {
+    cidInput.addEventListener('input', () => { previewBtn.disabled = !cidInput.value.trim(); });
   }
+  urlInput.addEventListener('input', () => { pushBtn.style.display = 'none'; _items = []; });
+  nameInput.addEventListener('input', () => { _nameAutoFilled = false; });
 
-  btn.addEventListener('click', () => {
-    const trakt_url    = urlInput.value.trim();
-    const playlist_name = nameInput.value.trim();
-    const client_id    = (cidInput ? cidInput.value.trim() : '');
+  // ── ANALYSER ──────────────────────────────────────────────────────────────
+  previewBtn.addEventListener('click', () => {
+    const trakt_url = urlInput.value.trim();
+    const client_id = cidInput ? cidInput.value.trim() : '';
+    if (!trakt_url) { statusEl.textContent = '{{ t("playlist.error_no_url") }}'; return; }
 
-    if (!trakt_url) {
-      statusEl.textContent = '{{ t("playlist.error_no_url") }}';
-      return;
-    }
-
-    btn.disabled  = true;
+    previewBtn.disabled = true;
+    pushBtn.style.display = 'none';
+    _items = []; _unmatched = []; _hideUnmatched = false; _traktUrl = trakt_url;
     resultEl.style.display = 'none';
     statusEl.innerHTML = '<span class="pl-spinner"></span>{{ t("playlist.importing") }}';
 
-    fetch('/playlists/import', {
+    fetch('/playlists/preview', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trakt_url, playlist_name, client_id }),
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({trakt_url, client_id}),
     })
+    .then(r => r.json())
+    .then(data => {
+      previewBtn.disabled = false;
+      statusEl.textContent = '';
+      if (!data.ok) { showError(data.error || '{{ t("playlist.error_generic") }}'); return; }
+
+      _listName  = data.list_name || '';
+      _total     = data.total;
+      _unmatched = data.unmatched_items || [];
+      if (!nameInput.value.trim() || _nameAutoFilled) {
+        nameInput.value = _listName;
+        _nameAutoFilled = true;
+      }
+
+      // Ordre original Trakt préservé — unmatched deviennent des réservés ⏳
+      _items = (data.ordered_items || []).map(it => ({
+        key:           it.plex_key || null,
+        title:         it.title,
+        year:          it.year,
+        type:          it.type,
+        plex_title:    it.plex_title || null,
+        checked:       true,
+        available:     it.matched === true,
+        tmdb_id:       it.tmdb_id       || null,
+        imdb_id:       it.imdb_id       || null,
+        tvdb_id:       it.tvdb_id       || null,
+        episodes:      null,
+        ep_keys:       null,
+        season:        it.season        || null,
+        episode_num:   it.episode_num   || null,
+        episode_count: it.episode_count || null,
+        show_title:    it.show_title    || null,
+        show_tmdb_id:  it.show_tmdb_id  || null,
+        show_tvdb_id:  it.show_tvdb_id  || null,
+        show_imdb_id:  it.show_imdb_id  || null,
+      }));
+
+      renderAll(false);
+      if (_items.some(i => i.available)) pushBtn.style.display = '';
+    })
+    .catch(err => { previewBtn.disabled = false; statusEl.textContent = ''; showError(String(err)); });
+  });
+
+  // ── CRÉER MANUELLEMENT ────────────────────────────────────────────────────
+  scratchBtn.addEventListener('click', () => {
+    _items = []; _unmatched = []; _listName = ''; _traktUrl = ''; _total = 0; _hideUnmatched = true; _nameAutoFilled = false;
+    statusEl.textContent = '';
+    nameInput.value = '';
+    renderAll(false, null, null, 'add');
+    pushBtn.style.display = '';
+  });
+
+  // ── CRÉER DANS PLEX ───────────────────────────────────────────────────────
+  pushBtn.addEventListener('click', doPush);
+
+  function doPush() {
+    const playlist_name = nameInput.value.trim() || _listName;
+    const plex_keys = collectPlexKeys();
+    if (!plex_keys.length) { statusEl.textContent = '{{ t("playlist.error_no_items") }}'; return; }
+
+    pushBtn.disabled = true;
+    previewBtn.disabled = true;
+    statusEl.innerHTML = '<span class="pl-spinner"></span>{{ t("playlist.pushing") }}';
+
+    fetch('/playlists/push', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({playlist_name, plex_keys}),
+    })
+    .then(r => r.json())
+    .then(data => {
+      pushBtn.disabled = false;
+      previewBtn.disabled = false;
+      statusEl.textContent = '';
+      if (!data.ok) { showError(data.error || '{{ t("playlist.error_generic") }}'); return; }
+      renderAll(true, data.playlist_name, plex_keys.length);
+    })
+    .catch(err => {
+      pushBtn.disabled = false; previewBtn.disabled = false;
+      statusEl.textContent = ''; showError(String(err));
+    });
+  }
+
+  function collectPlexKeys() {
+    const keys = [];
+    _items.forEach(item => {
+      if (!item.checked) return;
+      if (!item.available || !item.key) return;  // ignorer les placeholders
+      if (item.ep_keys && item.ep_keys.length > 0) {
+        item.ep_keys.forEach(k => { if (k.checked) keys.push(k.key); });
+      } else {
+        keys.push(item.key);
+      }
+    });
+    return keys;
+  }
+
+  // ── RENDU PRINCIPAL ───────────────────────────────────────────────────────
+  function renderAll(pushed, playlistName, pushedCount, startTab) {
+    const checkedCount  = _items.filter(i => i.checked && i.available).length;
+    const pendingCount  = _items.filter(i => !i.available).length;
+    const activeTab     = startTab || 'matched';
+
+    const tab = (id, label, active) =>
+      `<button class="pl-tab ${active ? 'active' : ''}" data-panel="${id}">${label}</button>`;
+    const panel = (id, active, content = '') =>
+      `<div class="pl-panel ${active ? 'active' : ''}" id="pl-panel-${id}">${content}</div>`;
+
+    let statsHtml = '';
+    if (!_hideUnmatched) {
+      statsHtml = `<div class="pl-stats">
+        <div class="pl-stat"><span class="pl-stat-num">${_total}</span><span class="pl-stat-label">{{ t("playlist.stat_total") }}</span></div>
+        <div class="pl-stat"><span class="pl-stat-num ok">${_items.filter(i=>i.available).length}</span><span class="pl-stat-label">{{ t("playlist.stat_matched") }}</span></div>
+        <div class="pl-stat"><span class="pl-stat-num ${_unmatched.length > 0 ? 'warn' : ''}">${_unmatched.length}</span><span class="pl-stat-label">{{ t("playlist.stat_unmatched") }}</span></div>
+        ${pendingCount > 0 ? `<div class="pl-stat"><span class="pl-stat-num pend">${pendingCount}</span><span class="pl-stat-label">{{ t("playlist.badge_pending") }}</span></div>` : ''}
+      </div>`;
+    } else if (_items.length > 0) {
+      const avail = _items.filter(i => i.available).length;
+      const pend  = _items.filter(i => !i.available).length;
+      statsHtml = `<div class="pl-stats">
+        <div class="pl-stat"><span class="pl-stat-num">${_items.length}</span><span class="pl-stat-label">{{ t("playlist.stat_total") }}</span></div>
+        ${avail > 0 ? `<div class="pl-stat"><span class="pl-stat-num ok">${avail}</span><span class="pl-stat-label">{{ t("playlist.stat_matched") }}</span></div>` : ''}
+        ${pend  > 0 ? `<div class="pl-stat"><span class="pl-stat-num pend">${pend}</span><span class="pl-stat-label">{{ t("playlist.badge_pending") }}</span></div>` : ''}
+      </div>`;
+    }
+
+    const statusLine = pushed
+      ? `<div style="margin-bottom:.6rem;font-size:.85rem;color:#4caf50;">✅ {{ t("playlist.playlist_created") }} <strong>${escHtml(playlistName)}</strong> (${pushedCount} éléments)</div>`
+      : (!_hideUnmatched ? `<div style="margin-bottom:.6rem;font-size:.85rem;color:var(--muted);">{{ t("playlist.preview_hint") }}</div>` : '');
+
+    resultEl.innerHTML = `
+      ${statsHtml}
+      ${statusLine}
+      <div class="pl-tabs">
+        ${tab('matched',   '{{ t("playlist.tab_matched") }} (' + checkedCount + ')', activeTab === 'matched')}
+        ${!_hideUnmatched ? tab('unmatched', '{{ t("playlist.tab_unmatched") }} (' + _unmatched.length + ')', activeTab === 'unmatched') : ''}
+        ${tab('add', '{{ t("playlist.tab_add") }}', activeTab === 'add')}
+      </div>
+      ${panel('matched',   activeTab === 'matched')}
+      ${!_hideUnmatched ? panel('unmatched', activeTab === 'unmatched', buildUnmatchedTable()) : ''}
+      ${panel('add',       activeTab === 'add', buildAddPanel())}
+    `;
+    resultEl.style.display = 'block';
+
+    renderMatchedTable();
+    bindTabs();
+    bindAddPanel();
+    if (!_hideUnmatched) bindUnmatchedPanel();
+  }
+
+  // ── TABLE ITEMS MATCHÉS ───────────────────────────────────────────────────
+  function renderMatchedTable() {
+    const panel = document.getElementById('pl-panel-matched');
+    if (!panel) return;
+
+    if (_items.length === 0) {
+      panel.innerHTML = `<p class="pl-muted">{{ t("playlist.no_items") }}</p>`;
+      return;
+    }
+
+    const pendingCount = _items.filter(i => i.checked && !i.available).length;
+    const pendingHint  = pendingCount > 0
+      ? `<p style="font-size:.8rem;color:#ffa726;margin:.5rem 0 0;">⏳ ${'{{ t("playlist.pending_hint") }}'.replace('{n}', pendingCount)}</p>`
+      : '';
+
+    const tbody = _items.map((item, idx) => {
+      const isPlaceholder = !item.available;
+      let badge;
+      if (isPlaceholder) {
+        badge = '<span class="pl-badge-pending">⏳ {{ t("playlist.badge_pending") }}</span>';
+      } else if (item.type === 'movie') {
+        badge = '<span class="pl-badge-movie">Film</span>';
+      } else if (item.type === 'episode') {
+        badge = `<span class="pl-badge-episode">S${String(item.season||0).padStart(2,'0')}E${String(item.episode_num||0).padStart(2,'0')}</span>`;
+      } else if (item.type === 'season') {
+        badge = `<span class="pl-badge-episode">S${String(item.season||0).padStart(2,'0')}</span>`;
+      } else {
+        badge = '<span class="pl-badge-show">Série</span>';
+      }
+
+      const year = item.year ? ` (${item.year})` : '';
+      const chk  = `<input type="checkbox" ${item.checked ? 'checked' : ''} data-idx="${idx}" class="pl-item-chk">`;
+      const expandBtn = (item.type === 'show' && !isPlaceholder)
+        ? `<button class="pl-expand-btn" data-idx="${idx}" title="{{ t('playlist.expand_episodes') }}">▶</button>`
+        : '';
+      const flattenBtn = (item.type === 'show' && item.episodes && item.episodes.length > 0)
+        ? `<button class="pl-flatten-btn" data-idx="${idx}" title="Détacher les épisodes">⇩</button>`
+        : '';
+      const linkBtn = isPlaceholder
+        ? `<button class="pl-link-btn ${_linkIdx === idx ? 'pl-link-btn-active' : ''}" data-idx="${idx}" title="Lier à un item Plex">🔗</button>`
+        : '';
+      const removeBtn = `<button class="pl-remove-btn" data-idx="${idx}">✕</button>`;
+
+      let plexCol;
+      if (isPlaceholder) {
+        plexCol = `<span style="color:var(--muted);font-size:.75rem;">— {{ t("playlist.badge_pending") }}</span>`;
+      } else if (item.type === 'episode') {
+        plexCol = escHtml(item.show_title || item.plex_title || '');
+      } else if (item.type === 'season') {
+        const epCount = item.episode_count ? ` <span style="color:var(--muted);font-size:.75rem;">(${item.episode_count} ép.)</span>` : '';
+        plexCol = escHtml(item.plex_title || item.show_title || '') + epCount;
+      } else {
+        plexCol = escHtml(item.plex_title || '');
+      }
+
+      const titleDisplay = item.type === 'season'
+        ? escHtml(item.show_title || item.title) + ` <span style="color:var(--muted);font-size:.8rem;">Saison ${item.season||'?'}</span>`
+        : escHtml(item.title) + escHtml(year);
+      let rows = `<tr class="pl-item-row ${isPlaceholder ? 'pl-pending-row' : ''}" draggable="true" data-idx="${idx}">
+        <td class="pl-drag-handle" title="Drag to reorder">⠿</td>
+        <td>${chk}</td>
+        <td>${badge}</td>
+        <td>${titleDisplay}</td>
+        <td class="pl-muted">${plexCol}</td>
+        <td style="white-space:nowrap;">${expandBtn} ${flattenBtn} ${linkBtn} ${removeBtn}</td>
+      </tr>`;
+
+      // Ligne de liaison manuelle (affichée quand _linkIdx === idx)
+      if (_linkIdx === idx) {
+        rows += `<tr class="pl-link-row" data-link-idx="${idx}">
+          <td colspan="4" style="padding:.4rem .6rem;">
+            <div style="display:flex;gap:.4rem;align-items:center;">
+              <input type="search" id="pl-link-input-${idx}" placeholder="Rechercher dans Plex…" style="flex:1;font-size:.82rem;" autocomplete="off">
+              <select id="pl-link-type-${idx}" style="padding:4px 6px;font-size:.82rem;">
+                <option value="">Tout</option>
+                <option value="movie" ${item.type==='movie'?'selected':''}>Films</option>
+                <option value="show"  ${item.type==='show'||item.type==='episode'?'selected':''}>Séries</option>
+              </select>
+              <button class="button-secondary pl-link-search-btn" data-link-idx="${idx}" style="padding:4px 8px;font-size:.82rem;">🔍</button>
+            </div>
+            <div id="pl-link-results-${idx}" style="margin-top:.3rem;"></div>
+          </td>
+          <td></td>
+        </tr>`;
+      }
+
+      if (item.episodes && item.episodes.length > 0) {
+        rows += item.episodes.map((ep, ei) => {
+          const epKey = item.ep_keys ? item.ep_keys[ei] : null;
+          const epChk = epKey !== null
+            ? `<input type="checkbox" ${epKey.checked ? 'checked' : ''} data-item-idx="${idx}" data-ep-idx="${ei}" class="pl-ep-chk">`
+            : '';
+          return `<tr class="pl-ep-row">
+            <td></td><td>${epChk}</td>
+            <td colspan="3">S${String(ep.season).padStart(2,'0')}E${String(ep.episode).padStart(2,'0')} — ${escHtml(ep.title)}</td>
+            <td></td>
+          </tr>`;
+        }).join('');
+      }
+      return rows;
+    }).join('');
+
+    panel.innerHTML = `<table class="pl-table">
+      <thead><tr>
+        <th style="width:1.5rem;"></th>
+        <th style="width:2rem;"></th>
+        <th>{{ t("playlist.col_type") }}</th>
+        <th>{{ t("playlist.col_trakt") }}</th>
+        <th>{{ t("playlist.col_plex") }}</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>
+    ${pendingHint}
+    <div style="margin-top:.75rem; display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+      <button class="button-primary pl-push-inline-btn">{{ t("playlist.push_btn") }}</button>
+      <button class="button-secondary pl-save-inline-btn">💾 {{ t("playlist.save_btn") }}</button>
+    </div>`;
+
+    // Bouton push inline
+    panel.querySelector('.pl-push-inline-btn').addEventListener('click', doPush);
+
+    // Bouton sauvegarder inline
+    panel.querySelector('.pl-save-inline-btn').addEventListener('click', doSave);
+
+    // Checkboxes items
+    panel.querySelectorAll('.pl-item-chk').forEach(chk => {
+      chk.addEventListener('change', () => {
+        _items[parseInt(chk.dataset.idx)].checked = chk.checked;
+        updateMatchedCount();
+      });
+    });
+
+    // Checkboxes épisodes
+    panel.querySelectorAll('.pl-ep-chk').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const ii = parseInt(chk.dataset.itemIdx);
+        const ei = parseInt(chk.dataset.epIdx);
+        if (_items[ii].ep_keys) _items[ii].ep_keys[ei].checked = chk.checked;
+      });
+    });
+
+    // Expand show
+    panel.querySelectorAll('.pl-expand-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx  = parseInt(btn.dataset.idx);
+        const item = _items[idx];
+        if (item.episodes) { item.episodes = null; item.ep_keys = null; renderMatchedTable(); return; }
+        btn.textContent = '⏳'; btn.disabled = true;
+        fetch(`/playlists/plex-episodes/${item.key}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.ok && data.episodes.length > 0) {
+              item.episodes = data.episodes;
+              item.ep_keys  = data.episodes.map(ep => ({key: ep.key, checked: true}));
+            } else {
+              item.episodes = []; item.ep_keys = null;
+            }
+            renderMatchedTable();
+          })
+          .catch(() => { btn.textContent = '▶'; btn.disabled = false; });
+      });
+    });
+
+    // Supprimer item
+    panel.querySelectorAll('.pl-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        _items.splice(parseInt(btn.dataset.idx), 1);
+        renderMatchedTable(); updateMatchedCount();
+      });
+    });
+
+    // Détacher show → épisodes individuels
+    panel.querySelectorAll('.pl-flatten-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        flattenShow(parseInt(btn.dataset.idx));
+        renderMatchedTable(); updateMatchedCount();
+      });
+    });
+
+    // 🔗 Liaison manuelle
+    panel.querySelectorAll('.pl-link-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        _linkIdx = (_linkIdx === idx) ? null : idx;
+        renderMatchedTable();
+        if (_linkIdx !== null) {
+          const inp = document.getElementById(`pl-link-input-${_linkIdx}`);
+          if (inp) inp.focus();
+        }
+      });
+    });
+
+    panel.querySelectorAll('.pl-link-search-btn').forEach(btn => {
+      btn.addEventListener('click', () => doLinkSearch(parseInt(btn.dataset.linkIdx)));
+    });
+
+    panel.querySelectorAll(`[id^="pl-link-input-"]`).forEach(inp => {
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') doLinkSearch(parseInt(inp.id.replace('pl-link-input-', '')));
+      });
+    });
+
+    // ── Drag-and-drop ────────────────────────────────────────────────────────
+    panel.querySelectorAll('tr.pl-item-row').forEach(row => {
+      row.addEventListener('dragstart', e => {
+        _dragIdx = parseInt(row.dataset.idx);
+        row.classList.add('pl-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', _dragIdx);
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('pl-dragging');
+        panel.querySelectorAll('tr.pl-item-row').forEach(r => r.classList.remove('pl-drag-over-top', 'pl-drag-over-bottom'));
+      });
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const toIdx = parseInt(row.dataset.idx);
+        if (_dragIdx === null || _dragIdx === toIdx) return;
+        panel.querySelectorAll('tr.pl-item-row').forEach(r => r.classList.remove('pl-drag-over-top', 'pl-drag-over-bottom'));
+        row.classList.add(toIdx > _dragIdx ? 'pl-drag-over-bottom' : 'pl-drag-over-top');
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('pl-drag-over-top', 'pl-drag-over-bottom');
+      });
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        const toIdx = parseInt(row.dataset.idx);
+        if (_dragIdx === null || _dragIdx === toIdx) return;
+        const dragged = _items.splice(_dragIdx, 1)[0];
+        _items.splice(toIdx > _dragIdx ? toIdx - 1 : toIdx, 0, dragged);
+        _dragIdx = null;
+        renderMatchedTable(); updateMatchedCount();
+      });
+    });
+  }
+
+  // ── Liaison manuelle ─────────────────────────────────────────────────────
+
+  function _linkItem(idx, key, plexTitle) {
+    _items[idx].key        = key;
+    _items[idx].plex_title = plexTitle;
+    _items[idx].available  = true;
+    _linkIdx = null;
+    renderMatchedTable();
+    updateMatchedCount();
+    pushBtn.style.display = '';
+  }
+
+  function _renderLinkShowResults(idx, results, resultsEl) {
+    resultsEl.innerHTML = `<div class="pl-search-results" style="max-height:220px;overflow-y:auto;">${
+      results.map(r => {
+        const badge = r.type === 'movie' ? '<span class="pl-badge-movie">Film</span>' : '<span class="pl-badge-show">Série</span>';
+        const year  = r.year ? ` (${r.year})` : '';
+        const action = r.type === 'show'
+          ? `<span style="margin-left:auto;font-size:.73rem;color:var(--muted);white-space:nowrap;">▶ Épisodes</span>`
+          : `<span style="margin-left:auto;font-size:.73rem;color:var(--accent);white-space:nowrap;">🔗 Lier</span>`;
+        return `<div class="pl-search-result-row" data-key="${escHtml(r.key)}" data-title="${escHtml(r.title)}" data-type="${r.type}">
+          ${badge} ${escHtml(r.title)}${escHtml(year)} ${action}
+        </div>`;
+      }).join('')
+    }</div>`;
+    resultsEl.querySelectorAll('.pl-search-result-row').forEach(row => {
+      row.addEventListener('click', () => {
+        if (row.dataset.type === 'show') {
+          _loadEpisodesForLink(idx, row.dataset.key, row.dataset.title, resultsEl);
+        } else {
+          _linkItem(idx, row.dataset.key, row.dataset.title);
+        }
+      });
+    });
+  }
+
+  function _loadEpisodesForLink(idx, showKey, showTitle, resultsEl) {
+    resultsEl.innerHTML = '<span class="pl-spinner" style="width:14px;height:14px;margin:.3rem;"></span>';
+    fetch(`/playlists/plex-episodes/${showKey}`)
       .then(r => r.json())
       .then(data => {
-        btn.disabled = false;
-        if (!data.ok) {
-          statusEl.textContent = '';
-          showError(data.error || '{{ t("playlist.error_generic") }}');
+        if (!data.ok || !data.episodes.length) {
+          resultsEl.innerHTML = `<p class="pl-muted" style="font-size:.8rem;padding:.3rem;">Aucun épisode trouvé.</p>`;
           return;
         }
-        statusEl.textContent = '';
-        showResult(data);
+        // Group by season
+        const seasons = {};
+        data.episodes.forEach(ep => { (seasons[ep.season] = seasons[ep.season] || []).push(ep); });
+
+        let html = `<div class="pl-search-results" style="max-height:260px;overflow-y:auto;">`;
+        html += `<div class="pl-search-result-row pl-link-back-btn" style="color:var(--muted);font-size:.78rem;">← Retour</div>`;
+        html += `<div style="padding:.2rem .75rem;font-size:.8rem;font-weight:600;color:var(--fg);border-bottom:1px solid var(--border);">${escHtml(showTitle)}</div>`;
+        Object.keys(seasons).sort((a,b) => a-b).forEach(s => {
+          html += `<div style="padding:.2rem .75rem .1rem;font-size:.75rem;font-weight:600;color:var(--muted);">Saison ${s}</div>`;
+          seasons[s].forEach(ep => {
+            const se = `S${String(ep.season).padStart(2,'0')}E${String(ep.episode).padStart(2,'0')}`;
+            html += `<div class="pl-search-result-row pl-ep-link-row" style="padding-left:1.25rem;font-size:.8rem;"
+              data-key="${escHtml(ep.key)}" data-show="${escHtml(showTitle)}" data-title="${escHtml(ep.title)}">
+              <span class="pl-badge-episode">${se}</span>
+              ${escHtml(ep.title)}
+              <span style="margin-left:auto;font-size:.73rem;color:var(--accent);">🔗</span>
+            </div>`;
+          });
+        });
+        html += `</div>`;
+        resultsEl.innerHTML = html;
+
+        resultsEl.querySelector('.pl-link-back-btn').addEventListener('click', () => doLinkSearch(idx));
+        resultsEl.querySelectorAll('.pl-ep-link-row').forEach(row => {
+          row.addEventListener('click', () => {
+            _linkItem(idx, row.dataset.key, `${row.dataset.show} — ${row.dataset.title}`);
+          });
+        });
       })
-      .catch(err => {
-        btn.disabled = false;
-        statusEl.textContent = '';
-        showError(String(err));
+      .catch(() => { resultsEl.innerHTML = `<p class="pl-muted" style="font-size:.8rem;padding:.3rem;">Erreur réseau.</p>`; });
+  }
+
+  function doLinkSearch(idx) {
+    const inp     = document.getElementById(`pl-link-input-${idx}`);
+    const typeSel = document.getElementById(`pl-link-type-${idx}`);
+    const resultsEl = document.getElementById(`pl-link-results-${idx}`);
+    if (!inp || !resultsEl) return;
+    const q = inp.value.trim();
+    if (!q) return;
+    resultsEl.innerHTML = '<span class="pl-spinner" style="width:14px;height:14px;margin:.2rem;"></span>';
+    const type = typeSel ? typeSel.value : '';
+    fetch(`/playlists/plex-search?q=${encodeURIComponent(q)}&type=${encodeURIComponent(type)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok || !data.results.length) {
+          resultsEl.innerHTML = `<p class="pl-muted" style="font-size:.8rem;padding:.2rem 0;">{{ t("playlist.add_no_results") }}</p>`;
+          return;
+        }
+        _renderLinkShowResults(idx, data.results, resultsEl);
+      })
+      .catch(() => { resultsEl.innerHTML = `<p class="pl-muted" style="font-size:.8rem;">Erreur réseau.</p>`; });
+  }
+
+  // Remplace un show expandé par ses épisodes comme items indépendants
+  function flattenShow(idx) {
+    const item = _items[idx];
+    if (!item || item.type !== 'show' || !item.episodes || !item.episodes.length) return;
+    const epItems = item.episodes.map((ep, ei) => {
+      const epKey = item.ep_keys ? item.ep_keys[ei] : null;
+      return {
+        key:         ep.key,
+        title:       ep.title,
+        year:        null,
+        type:        'episode',
+        plex_title:  item.plex_title || item.title,
+        checked:     epKey ? epKey.checked : true,
+        available:   true,
+        tmdb_id:     null,
+        imdb_id:     null,
+        tvdb_id:     null,
+        episodes:    null,
+        ep_keys:     null,
+        season:      ep.season,
+        episode_num: ep.episode,
+        show_title:  item.title,
+      };
+    });
+    _items.splice(idx, 1, ...epItems);
+  }
+
+  function updateMatchedCount() {
+    const tab = document.querySelector('.pl-tab[data-panel="matched"]');
+    if (tab) tab.textContent = `{{ t("playlist.tab_matched") }} (${_items.filter(i=>i.checked && i.available).length})`;
+    pushBtn.style.display = _items.some(i => i.available) ? '' : 'none';
+  }
+
+  // ── TABLE INTROUVABLES ────────────────────────────────────────────────────
+  function buildUnmatchedTable() {
+    if (!_unmatched.length) return `<p class="pl-muted">{{ t("playlist.no_items") }}</p>`;
+    const rows = _unmatched.map((u, ui) => {
+      let badge, titleCell, year;
+      if (u.type === 'episode') {
+        const se = (u.season != null && u.episode != null)
+          ? `S${String(u.season).padStart(2,'0')}E${String(u.episode).padStart(2,'0')}`
+          : '';
+        badge = `<span class="pl-badge-episode">${se || 'Ép.'}</span>`;
+        const showName = u.show_title ? `<span style="color:var(--muted);font-size:.8rem;">${escHtml(u.show_title)}</span> — ` : '';
+        titleCell = `${showName}${escHtml(u.title)}`;
+        year = '';
+      } else if (u.type === 'season') {
+        badge = `<span class="pl-badge-episode">S${String(u.season||0).padStart(2,'0')}</span>`;
+        const showName = u.show_title ? `<span style="color:var(--muted);font-size:.8rem;">${escHtml(u.show_title)}</span> ` : '';
+        titleCell = `${showName}<span>Saison ${u.season||'?'}</span>`;
+        year = '';
+      } else {
+        badge = u.type === 'movie'
+          ? '<span class="pl-badge-movie">Film</span>'
+          : '<span class="pl-badge-show">Série</span>';
+        year = u.year ? ` (${u.year})` : '';
+        titleCell = `${escHtml(u.title)}${escHtml(year)}`;
+      }
+      const tmdb = u.tmdb_id
+        ? `<a href="https://www.themoviedb.org/${u.type === 'movie' ? 'movie' : 'tv'}/${u.tmdb_id}" target="_blank" rel="noopener" style="font-size:.75rem;">TMDB</a>`
+        : '';
+      const reserveBtn = `<button class="pl-reserve-btn"
+        data-ui="${ui}"
+        data-title="${escHtml(u.title)}"
+        data-year="${u.year||''}"
+        data-type="${u.type}"
+        data-tmdb="${u.tmdb_id||''}"
+        data-imdb="${u.imdb_id||''}"
+        data-tvdb="${u.tvdb_id||''}">+ {{ t("playlist.reserve_btn") }}</button>`;
+      return `<tr id="pl-unmatched-row-${ui}">
+        <td>${badge}</td>
+        <td>${titleCell}</td>
+        <td>${tmdb}</td>
+        <td>${reserveBtn}</td>
+      </tr>`;
+    }).join('');
+    return `<table class="pl-table">
+      <thead><tr>
+        <th>{{ t("playlist.col_type") }}</th>
+        <th>{{ t("playlist.col_trakt") }}</th>
+        <th></th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  function bindUnmatchedPanel() {
+    const panel = document.getElementById('pl-panel-unmatched');
+    if (!panel) return;
+    panel.querySelectorAll('.pl-reserve-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ui = parseInt(btn.dataset.ui);
+        // Vérifier doublon
+        if (_items.find(i => i.title === btn.dataset.title && String(i.year||'') === btn.dataset.year)) return;
+        _items.push({
+          key:         null,
+          title:       btn.dataset.title,
+          year:        btn.dataset.year ? parseInt(btn.dataset.year) : null,
+          type:        btn.dataset.type,
+          plex_title:  null,
+          checked:     true,
+          available:   false,
+          tmdb_id:     btn.dataset.tmdb ? parseInt(btn.dataset.tmdb) : null,
+          imdb_id:     btn.dataset.imdb || null,
+          tvdb_id:     btn.dataset.tvdb ? parseInt(btn.dataset.tvdb) : null,
+          episodes:    null,
+          ep_keys:     null,
+          season:      null,
+          episode_num: null,
+          show_title:  null,
+        });
+        // Marquer la ligne comme réservée
+        const row = document.getElementById(`pl-unmatched-row-${ui}`);
+        if (row) { btn.disabled = true; btn.textContent = '✓ {{ t("playlist.badge_pending") }}'; btn.style.color = '#ffa726'; }
+        renderMatchedTable();
+        updateMatchedCount();
+        pushBtn.style.display = '';
       });
-  });
+    });
+  }
+
+  // ── PANEL AJOUT MANUEL ────────────────────────────────────────────────────
+  function buildAddPanel() {
+    return `
+      <div class="pl-manual-section">
+        <h3>{{ t("playlist.add_manual_title") }}</h3>
+        <div class="pl-search-row">
+          <input type="search" id="pl-add-search" placeholder="{{ t('playlist.add_search_placeholder') }}" spellcheck="false">
+          <select id="pl-add-type">
+            <option value="">{{ t("playlist.add_type_all") }}</option>
+            <option value="movie">{{ t("playlist.add_type_movie") }}</option>
+            <option value="show">{{ t("playlist.add_type_show") }}</option>
+          </select>
+          <button class="button-secondary" id="pl-add-search-btn">{{ t("playlist.add_search_btn") }}</button>
+        </div>
+        <div id="pl-add-results"></div>
+      </div>
+      <div class="pl-manual-section">
+        <h3>{{ t("playlist.tmdb_search_title") }}</h3>
+        <div class="pl-search-row">
+          <input type="search" id="pl-tmdb-search" placeholder="{{ t('playlist.tmdb_search_ph') }}" spellcheck="false">
+          <button class="button-secondary" id="pl-tmdb-search-btn">{{ t("playlist.add_search_btn") }}</button>
+        </div>
+        <div id="pl-tmdb-results"></div>
+      </div>`;
+  }
+
+  function bindAddPanel() {
+    const searchInput = document.getElementById('pl-add-search');
+    const typeSelect  = document.getElementById('pl-add-type');
+    const searchBtn   = document.getElementById('pl-add-search-btn');
+    const resultsEl   = document.getElementById('pl-add-results');
+    if (!searchBtn) return;
+
+    const doSearch = () => {
+      const q = (searchInput.value || '').trim();
+      if (!q) return;
+      resultsEl.innerHTML = '<span class="pl-spinner"></span>';
+      const type = typeSelect.value;
+      fetch(`/playlists/plex-search?q=${encodeURIComponent(q)}&type=${encodeURIComponent(type)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok || !data.results.length) {
+            resultsEl.innerHTML = `<p class="pl-muted" style="padding:.5rem;">{{ t("playlist.add_no_results") }}</p>`;
+            return;
+          }
+          resultsEl.innerHTML = `<div class="pl-search-results">${
+            data.results.map(r => {
+              const badge = r.type === 'movie' ? '<span class="pl-badge-movie">Film</span>' : '<span class="pl-badge-show">Série</span>';
+              const year = r.year ? ` (${r.year})` : '';
+              return `<div class="pl-search-result-row"
+                data-key="${escHtml(r.key)}" data-title="${escHtml(r.title)}"
+                data-year="${r.year||''}" data-type="${r.type}">
+                ${badge} ${escHtml(r.title)}${escHtml(year)}
+                <span style="margin-left:auto; font-size:.75rem; color:var(--accent);">+ {{ t("playlist.add_add") }}</span>
+              </div>`;
+            }).join('')
+          }</div>`;
+          resultsEl.querySelectorAll('.pl-search-result-row').forEach(row => {
+            row.addEventListener('click', () => {
+              if (_items.find(i => i.key === row.dataset.key)) return;
+              _items.push({
+                key:        row.dataset.key,
+                title:      row.dataset.title,
+                year:       row.dataset.year ? parseInt(row.dataset.year) : null,
+                type:       row.dataset.type,
+                plex_title: row.dataset.title,
+                checked:    true,
+                available:  true,
+                tmdb_id:    null, imdb_id: null, tvdb_id: null,
+                episodes:   null, ep_keys: null,
+                season:     null, episode_num: null, show_title: null,
+              });
+              renderMatchedTable();
+              updateMatchedCount();
+              row.style.opacity = '.4'; row.style.pointerEvents = 'none';
+              pushBtn.style.display = '';
+            });
+          });
+        })
+        .catch(() => { resultsEl.innerHTML = `<p class="pl-muted">Erreur réseau.</p>`; });
+    };
+
+    searchBtn.addEventListener('click', doSearch);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+    // ── Recherche TMDB (réservés) ─────────────────────────────────────────
+    const tmdbSearchInput = document.getElementById('pl-tmdb-search');
+    const tmdbSearchBtn   = document.getElementById('pl-tmdb-search-btn');
+    const tmdbResultsEl   = document.getElementById('pl-tmdb-results');
+    if (!tmdbSearchBtn) return;
+
+    const doTmdbSearch = () => {
+      const q = (tmdbSearchInput.value || '').trim();
+      if (!q) return;
+      tmdbResultsEl.innerHTML = '<span class="pl-spinner"></span>';
+      fetch(`/playlists/tmdb-search?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok) {
+            tmdbResultsEl.innerHTML = `<p class="pl-muted" style="padding:.5rem;">${escHtml(data.error || '{{ t("playlist.error_generic") }}')}</p>`;
+            return;
+          }
+          if (!data.results.length) {
+            tmdbResultsEl.innerHTML = `<p class="pl-muted" style="padding:.5rem;">{{ t("playlist.add_no_results") }}</p>`;
+            return;
+          }
+          tmdbResultsEl.innerHTML = `<div class="pl-search-results">${
+            data.results.map(r => {
+              const badge = r.type === 'movie'
+                ? '<span class="pl-badge-movie">Film</span>'
+                : '<span class="pl-badge-show">Série</span>';
+              const year = r.year ? ` (${r.year})` : '';
+              const poster = r.poster
+                ? `<img src="${escHtml(r.poster)}" alt="" style="width:28px;height:42px;object-fit:cover;border-radius:2px;flex-shrink:0;">`
+                : `<span style="width:28px;height:42px;background:var(--bg-elev-2);display:inline-block;border-radius:2px;flex-shrink:0;"></span>`;
+              const alreadyIn = !!_items.find(i => i.tmdb_id && i.tmdb_id === r.tmdb_id);
+              return `<div class="pl-search-result-row ${alreadyIn ? 'pl-tmdb-already' : ''}"
+                style="${alreadyIn ? 'opacity:.4;pointer-events:none;' : ''}"
+                data-tmdb="${r.tmdb_id}" data-title="${escHtml(r.title)}"
+                data-year="${r.year||''}" data-type="${r.type}">
+                ${poster}
+                <span>${badge} ${escHtml(r.title)}${escHtml(year)}</span>
+                <span style="margin-left:auto;font-size:.75rem;color:${alreadyIn ? 'var(--muted)' : 'var(--accent)'};">
+                  ${alreadyIn ? '✓' : '+ {{ t("playlist.add_reserve_btn") }}'}
+                </span>
+              </div>`;
+            }).join('')
+          }</div>`;
+
+          tmdbResultsEl.querySelectorAll('.pl-search-result-row:not(.pl-tmdb-already)').forEach(row => {
+            row.addEventListener('click', () => {
+              const tmdb_id = parseInt(row.dataset.tmdb);
+              if (_items.find(i => i.tmdb_id === tmdb_id)) return;
+              _items.push({
+                key:        null,
+                title:      row.dataset.title,
+                year:       row.dataset.year ? parseInt(row.dataset.year) : null,
+                type:       row.dataset.type,
+                plex_title: null,
+                checked:    true,
+                available:  false,
+                tmdb_id,
+                imdb_id:    null,
+                tvdb_id:    null,
+                episodes:   null, ep_keys: null,
+                season:     null, episode_num: null, show_title: null,
+              });
+              row.style.opacity = '.4'; row.style.pointerEvents = 'none';
+              row.querySelector('span:last-child').textContent = '✓';
+              renderMatchedTable();
+              updateMatchedCount();
+              pushBtn.style.display = '';
+            });
+          });
+        })
+        .catch(() => { tmdbResultsEl.innerHTML = `<p class="pl-muted">Erreur réseau.</p>`; });
+    };
+
+    tmdbSearchBtn.addEventListener('click', doTmdbSearch);
+    tmdbSearchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doTmdbSearch(); });
+  }
+
+  // ── SAUVEGARDE ────────────────────────────────────────────────────────────
+  function doSave() {
+    const name = nameInput.value.trim() || _listName;
+    if (!name) { statusEl.textContent = '{{ t("playlist.error_no_name") }}'; nameInput.focus(); return; }
+
+    const items = _items.map(item => ({
+      title:         item.title,
+      year:          item.year || null,
+      type:          item.type,
+      tmdb_id:       item.tmdb_id       || null,
+      imdb_id:       item.imdb_id       || null,
+      tvdb_id:       item.tvdb_id       || null,
+      plex_key:      item.key           || null,
+      plex_title:    item.plex_title    || null,
+      available:     item.available !== false,
+      season:        item.season        || null,
+      episode_num:   item.episode_num   || null,
+      episode_count: item.episode_count || null,
+      show_title:    item.show_title    || null,
+      show_tmdb_id:  item.show_tmdb_id  || null,
+      show_tvdb_id:  item.show_tvdb_id  || null,
+      show_imdb_id:  item.show_imdb_id  || null,
+    }));
+
+    statusEl.innerHTML = '<span class="pl-spinner"></span>{{ t("playlist.pushing") }}';
+    fetch('/playlists/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, trakt_url: _traktUrl, items}),
+    })
+    .then(r => r.json())
+    .then(data => {
+      statusEl.textContent = '';
+      if (!data.ok) { showError(data.error || '{{ t("playlist.error_generic") }}'); return; }
+      statusEl.innerHTML = `<span style="color:#4caf50;">✅ {{ t("playlist.saved_ok") }}</span>`;
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      loadSavedPlaylists();
+    })
+    .catch(err => { statusEl.textContent = ''; showError(String(err)); });
+  }
+
+  // ── PLAYLISTS SAUVEGARDÉES ────────────────────────────────────────────────
+  function loadSavedPlaylists() {
+    fetch('/playlists/saved')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) return;
+        const list  = document.getElementById('pl-saved-list');
+        const count = document.getElementById('pl-saved-count');
+        if (count) count.textContent = data.playlists.length > 0 ? `(${data.playlists.length})` : '';
+        if (!list) return;
+        if (!data.playlists.length) {
+          list.innerHTML = `<p class="pl-muted" style="padding:.5rem .75rem;">{{ t("playlist.saved_empty") }}</p>`;
+          return;
+        }
+        list.innerHTML = data.playlists.map(p => {
+          const date = p.updated_at ? new Date(p.updated_at).toLocaleDateString() : '';
+          const meta = `${p.total} items${p.pending > 0 ? ` · ${p.pending} ⏳` : ''} · ${date}`;
+          return `<div class="pl-saved-row">
+            <span class="pl-saved-name" title="${escHtml(p.name)}">${escHtml(p.name)}</span>
+            <span class="pl-saved-meta">${escHtml(meta)}</span>
+            <button class="button-secondary" style="padding:2px 8px;font-size:.8rem;" data-load="${escHtml(p.id)}">{{ t("playlist.load_btn") }}</button>
+            <button class="pl-remove-btn" data-del="${escHtml(p.id)}" title="{{ t('playlist.delete_confirm') }}">✕</button>
+          </div>`;
+        }).join('');
+
+        // Load
+        list.querySelectorAll('[data-load]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const pid = btn.dataset.load;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="pl-spinner" style="width:12px;height:12px;margin:0;"></span>';
+            fetch(`/playlists/load/${pid}`)
+              .then(r => r.json())
+              .then(data => {
+                btn.disabled = false; btn.textContent = '{{ t("playlist.load_btn") }}';
+                if (!data.ok) { showError(data.error || '{{ t("playlist.error_generic") }}'); return; }
+                _items = data.items.map(it => ({
+                  key:          it.plex_key      || null,
+                  title:        it.title,
+                  year:          it.year          || null,
+                  type:          it.type,
+                  plex_title:    it.plex_title    || null,
+                  checked:       true,
+                  available:     it.available !== false && !!it.plex_key,
+                  tmdb_id:       it.tmdb_id       || null,
+                  imdb_id:       it.imdb_id       || null,
+                  tvdb_id:       it.tvdb_id       || null,
+                  episodes:      null,
+                  ep_keys:       null,
+                  season:        it.season        || null,
+                  episode_num:   it.episode_num   || null,
+                  episode_count: it.episode_count || null,
+                  show_title:    it.show_title    || null,
+                  show_tmdb_id:  it.show_tmdb_id  || null,
+                  show_tvdb_id:  it.show_tvdb_id  || null,
+                  show_imdb_id:  it.show_imdb_id  || null,
+                }));
+                _listName  = data.name;
+                _traktUrl  = data.trakt_url || '';
+                _unmatched = [];
+                _total     = _items.length;
+                _hideUnmatched = true;
+                nameInput.value = data.name;
+                urlInput.value  = data.trakt_url || '';
+                renderAll(false);
+                pushBtn.style.display = _items.some(i => i.available) ? '' : 'none';
+                if (data.newly_available > 0) {
+                  const pushMsg = data.auto_pushed ? ' — playlist Plex mise à jour' : '';
+                  statusEl.innerHTML = `<span style="color:#4caf50;">✅ ${data.newly_available} nouveau(x) disponible(s)${pushMsg} !</span>`;
+                  setTimeout(() => { statusEl.textContent = ''; }, 5000);
+                  loadSavedPlaylists();
+                }
+              })
+              .catch(() => { btn.disabled = false; btn.textContent = '{{ t("playlist.load_btn") }}'; });
+          });
+        });
+
+        // Delete
+        list.querySelectorAll('[data-del]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (!confirm('{{ t("playlist.delete_confirm") }}')) return;
+            fetch(`/playlists/saved/${btn.dataset.del}`, {method: 'DELETE'})
+              .then(r => r.json())
+              .then(() => loadSavedPlaylists());
+          });
+        });
+      })
+      .catch(() => {});
+  }
+
+  // ── UTILITAIRES ───────────────────────────────────────────────────────────
+  function switchToTab(panelId) {
+    document.querySelectorAll('.pl-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.pl-panel').forEach(p => p.classList.remove('active'));
+    const tab = document.querySelector(`.pl-tab[data-panel="${panelId}"]`);
+    const panel = document.getElementById(`pl-panel-${panelId}`);
+    if (tab)   tab.classList.add('active');
+    if (panel) panel.classList.add('active');
+  }
+
+  function bindTabs() {
+    document.querySelectorAll('.pl-tab').forEach(tab => {
+      tab.addEventListener('click', () => switchToTab(tab.dataset.panel));
+    });
+  }
 
   function showError(msg) {
     resultEl.style.display = 'block';
     resultEl.innerHTML = `<div class="error-box">${escHtml(msg)}</div>`;
   }
 
-  function showResult(data) {
-    const matchedHtml   = buildTable(data.matched_items,   true);
-    const unmatchedHtml = buildTable(data.unmatched_items, false);
-
-    resultEl.innerHTML = `
-      <div class="pl-stats">
-        <div class="pl-stat">
-          <span class="pl-stat-num">${data.total}</span>
-          <span class="pl-stat-label">{{ t("playlist.stat_total") }}</span>
-        </div>
-        <div class="pl-stat">
-          <span class="pl-stat-num ok">${data.matched}</span>
-          <span class="pl-stat-label">{{ t("playlist.stat_matched") }}</span>
-        </div>
-        <div class="pl-stat">
-          <span class="pl-stat-num ${data.unmatched > 0 ? 'warn' : ''}">${data.unmatched}</span>
-          <span class="pl-stat-label">{{ t("playlist.stat_unmatched") }}</span>
-        </div>
-      </div>
-      <div style="margin-bottom:.5rem; font-size:.85rem;">
-        {{ t("playlist.playlist_created") }} <strong>${escHtml(data.playlist_name)}</strong>
-      </div>
-      <div class="pl-tabs">
-        <button class="pl-tab active" data-panel="matched">
-          {{ t("playlist.tab_matched") }} (${data.matched})
-        </button>
-        <button class="pl-tab" data-panel="unmatched">
-          {{ t("playlist.tab_unmatched") }} (${data.unmatched})
-        </button>
-      </div>
-      <div class="pl-panel active" id="pl-panel-matched">${matchedHtml}</div>
-      <div class="pl-panel"        id="pl-panel-unmatched">${unmatchedHtml}</div>
-    `;
-
-    resultEl.style.display = 'block';
-    bindTabs();
-  }
-
-  function buildTable(items, isMatched) {
-    if (!items || !items.length) {
-      return `<p class="pl-muted">{{ t("playlist.no_items") }}</p>`;
-    }
-    const rows = items.map(item => {
-      const badge = item.type === 'movie'
-        ? '<span class="pl-badge-movie">Film</span>'
-        : '<span class="pl-badge-show">Série</span>';
-      const year = item.year ? ` (${item.year})` : '';
-      if (isMatched) {
-        return `<tr>
-          <td>${badge}</td>
-          <td>${escHtml(item.title)}${escHtml(year)}</td>
-          <td class="pl-muted">${escHtml(item.plex_title || '')}</td>
-        </tr>`;
-      } else {
-        const tmdb = item.tmdb_id
-          ? `<a href="https://www.themoviedb.org/${item.type === 'movie' ? 'movie' : 'tv'}/${item.tmdb_id}" target="_blank" rel="noopener" style="font-size:.75rem;">TMDB</a>`
-          : '';
-        return `<tr>
-          <td>${badge}</td>
-          <td>${escHtml(item.title)}${escHtml(year)}</td>
-          <td>${tmdb}</td>
-        </tr>`;
-      }
-    }).join('');
-
-    if (isMatched) {
-      return `<table class="pl-table">
-        <thead><tr>
-          <th>{{ t("playlist.col_type") }}</th>
-          <th>{{ t("playlist.col_trakt") }}</th>
-          <th>{{ t("playlist.col_plex") }}</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-    } else {
-      return `<table class="pl-table">
-        <thead><tr>
-          <th>{{ t("playlist.col_type") }}</th>
-          <th>{{ t("playlist.col_trakt") }}</th>
-          <th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-    }
-  }
-
-  function bindTabs() {
-    document.querySelectorAll('.pl-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.pl-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.pl-panel').forEach(p => p.classList.remove('active'));
-        tab.classList.add('active');
-        const panel = document.getElementById('pl-panel-' + tab.dataset.panel);
-        if (panel) panel.classList.add('active');
-      });
-    });
-  }
-
   function escHtml(s) {
-    return String(s ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  // ── Saved toggle ──────────────────────────────────────────────────────────
+  const savedToggle = document.getElementById('pl-saved-toggle');
+  const savedList   = document.getElementById('pl-saved-list');
+  // Initialise le style inline pour que la détection d'état soit fiable
+  // (le CSS classe met display:none mais style.display vaut '' avant le 1er clic)
+  savedList.style.display = 'none';
+  savedToggle.addEventListener('click', () => {
+    const isOpen = savedList.style.display !== 'none';
+    savedList.style.display = isOpen ? 'none' : 'block';
+    savedToggle.classList.toggle('open', !isOpen);
+  });
+
+  // ── Sync maintenant ───────────────────────────────────────────────────────
+  document.getElementById('pl-sync-now-btn').addEventListener('click', () => {
+    const btn = document.getElementById('pl-sync-now-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="pl-spinner" style="width:12px;height:12px;margin:0 4px 0 0;"></span>';
+    fetch('/playlists/sync-now', {method: 'POST'})
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '↻ Sync';
+        if (data.ok) {
+          loadSavedPlaylists();
+          statusEl.innerHTML = '<span style="color:#4caf50;">✅ Sync terminée — vérifiez les logs</span>';
+          setTimeout(() => { statusEl.textContent = ''; }, 4000);
+        } else {
+          showError(data.error || 'Erreur sync');
+        }
+      })
+      .catch(() => { btn.disabled = false; btn.innerHTML = '↻ Sync'; });
+  });
+
+  // ── Import depuis Plex ────────────────────────────────────────────────────
+  const importPlexBtn   = document.getElementById('pl-import-plex-btn');
+  const importPlexPanel = document.getElementById('pl-import-plex-panel');
+  const importPlexList  = document.getElementById('pl-import-plex-list');
+  let _plexPlLoaded = false;
+
+  importPlexBtn.addEventListener('click', () => {
+    const open = importPlexPanel.style.display !== 'none';
+    importPlexPanel.style.display = open ? 'none' : 'block';
+    if (!open && !_plexPlLoaded) {
+      _plexPlLoaded = true;
+      fetch('/playlists/plex-playlists')
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok || !data.playlists.length) {
+            importPlexList.innerHTML = `<p class="pl-muted" style="padding:.5rem .75rem;">{{ t("playlist.plex_pl_empty") }}</p>`;
+            return;
+          }
+          importPlexList.innerHTML = data.playlists.map(p =>
+            `<div class="pl-saved-row" style="cursor:pointer;" data-plkey="${escHtml(p.key)}" data-plname="${escHtml(p.name)}">
+              <span class="pl-saved-name">${escHtml(p.name)}</span>
+              <span class="pl-saved-meta">${p.count != null ? p.count + ' items' : ''}</span>
+            </div>`
+          ).join('');
+
+          importPlexList.querySelectorAll('[data-plkey]').forEach(row => {
+            row.addEventListener('click', () => {
+              const key  = row.dataset.plkey;
+              const name = row.dataset.plname;
+              row.innerHTML = `<span class="pl-spinner" style="width:14px;height:14px;margin:.2rem .4rem;"></span> ${escHtml(name)}`;
+
+              fetch(`/playlists/plex-playlists/${key}/items`)
+                .then(r => r.json())
+                .then(data => {
+                  importPlexPanel.style.display = 'none';
+                  if (!data.ok) { showError(data.error || '{{ t("playlist.error_generic") }}'); return; }
+
+                  _items = data.items.map(it => ({
+                    key:           it.key,
+                    title:         it.title,
+                    year:          it.year || null,
+                    type:          it.type,
+                    plex_title:    it.plex_title || it.title,
+                    checked:       true,
+                    available:     true,
+                    tmdb_id:       null, imdb_id: null, tvdb_id: null,
+                    episodes:      null, ep_keys: null,
+                    season:        it.season        || null,
+                    episode_num:   it.episode_num   || null,
+                    episode_count: it.episode_count || null,
+                    show_title:    it.show_title     || null,
+                    show_tmdb_id:  null, show_tvdb_id: null, show_imdb_id: null,
+                  }));
+                  _listName  = data.name;
+                  _traktUrl  = '';
+                  _unmatched = [];
+                  _total     = _items.length;
+                  _hideUnmatched  = true;
+                  _nameAutoFilled = true;
+                  nameInput.value = data.name;
+                  urlInput.value  = '';
+                  renderAll(false);
+                  pushBtn.style.display = '';
+                })
+                .catch(() => { importPlexPanel.style.display = 'none'; });
+            });
+          });
+        })
+        .catch(() => {
+          importPlexList.innerHTML = `<p class="pl-muted" style="padding:.5rem .75rem;">Erreur réseau.</p>`;
+        });
+    }
+  });
+
+  // Charger la liste au démarrage
+  loadSavedPlaylists();
 })();
 </script>
 {% endblock %}
