@@ -447,6 +447,20 @@ def _is_season_dir(name: str) -> bool:
     return bool(SEASON_DIR_RE.match(n))
 
 
+_SEASON_DIR_NUM_RE = re.compile(r'^(?:s|season\s*|saison\s*)(\d{1,3})$', re.IGNORECASE)
+
+
+def _season_number_from_dir(name: str) -> Optional[int]:
+    n = (name or '').strip().lower().replace('_', ' ')
+    m = _SEASON_DIR_NUM_RE.match(n)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
 def _clean_series_name(name: str) -> str:
     if not name:
         return ''
@@ -638,13 +652,14 @@ def build_destination_path(
             out_stem = normalize_service_tag(stem)
         return os.path.join(dst_dir, to_safe_filename(out_stem) + ".mkv")
 
+    rel = os.path.relpath(src_file, src_root)
+    rel_parts = [p for p in os.path.normpath(rel).split(os.sep) if p and p != "."]
+
     # Priorité absolue : nom propre venant de Plex
     series_name = (forced_series_name or "").strip()
 
     # Fallback seulement si Plex n'a rien fourni
     if not series_name:
-        rel = os.path.relpath(src_file, src_root)
-        rel_parts = [p for p in os.path.normpath(rel).split(os.sep) if p and p != "."]
         src_root_name = os.path.basename(os.path.normpath(src_root)).strip()
 
         if len(rel_parts) >= 3 and _is_season_dir(rel_parts[-2]):
@@ -661,6 +676,11 @@ def build_destination_path(
     series_name = _resolve_series_folder_name(dst_dir, series_name, stem)
 
     season, episode, ep_title = parse_episode_info(filename)
+
+    # Le nom de fichier seul ne contient pas toujours la saison (ex: "Episode 01 <titre>.mkv"
+    # sans indicateur SxxExx) — on retombe sur le dossier "Saison NN" source s'il existe.
+    if season is None and len(rel_parts) >= 2:
+        season = _season_number_from_dir(rel_parts[-2])
 
     if season is not None:
         return os.path.join(
