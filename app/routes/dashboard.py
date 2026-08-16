@@ -20,6 +20,7 @@ from ..services.ftp_index_service import (
     ensure_ftp_index,
     load_ftp_index,
 )
+from ..services.ftp_download_service import episode_already_downloaded
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
@@ -370,6 +371,7 @@ def _compute_dashboard_bg(app_obj, cache_key, plex_token, selected_server_name,
                             first_ftp_ep = ftp_candidates[0] if ftp_candidates else None
 
                             ftp_batch = []
+                            ftp_downloaded_count = 0
                             for ep_copy in enriched_eps:
                                 ftp_ep = ep_copy.get("ftp_item")
                                 if not ftp_ep:
@@ -377,21 +379,33 @@ def _compute_dashboard_bg(app_obj, cache_key, plex_token, selected_server_name,
                                 ep_path = ftp_ep.get("path") or ftp_ep.get("remote_path") or ftp_ep.get("full_path")
                                 if not ep_path:
                                     continue
+                                ep_filename = ftp_ep.get("name") or os.path.basename(ep_path)
+                                ep_ftp_id = ftp_ep.get("ftp_id", "")
+                                ep_season = ep_copy.get("season")
+                                ep_episode = ep_copy.get("episode")
+                                already_downloaded = episode_already_downloaded(
+                                    ep_filename, ftp_id=ep_ftp_id,
+                                    season=ep_season, episode=ep_episode, series_title=show_title,
+                                )
+                                if already_downloaded:
+                                    ftp_downloaded_count += 1
                                 ftp_batch.append({
                                     "remote_path": ep_path,
-                                    "filename": ftp_ep.get("name") or os.path.basename(ep_path),
+                                    "filename": ep_filename,
                                     "media_type": "episode",
-                                    "ftp_id": ftp_ep.get("ftp_id", ""),
+                                    "ftp_id": ep_ftp_id,
                                     "media_key": ep_path,
-                                    "season": ep_copy.get("season"),
-                                    "episode": ep_copy.get("episode"),
+                                    "season": ep_season,
+                                    "episode": ep_episode,
                                     "series_title": show_title,
+                                    "already_downloaded": already_downloaded,
                                 })
 
                             enriched_missing["episodes"] = enriched_eps
                             enriched_missing["ftp_available"] = bool(first_ftp_ep)
                             enriched_missing["ftp_item"] = first_ftp_ep
                             enriched_missing["ftp_confidence"] = 95 if first_ftp_ep else None
+                            enriched_missing["ftp_downloaded_count"] = ftp_downloaded_count
                             enriched_missing["ftp_variant_type"] = "episode_match" if first_ftp_ep else None
                             enriched_missing["sources"] = ["ftp"] if first_ftp_ep else []
                             enriched_missing["ftp_batch"] = ftp_batch

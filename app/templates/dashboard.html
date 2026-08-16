@@ -633,10 +633,16 @@ async function ignoreItem(title, type, btn) {
                   {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('remote_path') %}{% endif %}
                   {% if not ftp_path and ftp_item %}{% set ftp_path = ftp_item.get('full_path') %}{% endif %}
                   {% set ftp_batch = item.get('ftp_batch') if item.type == 'show' else None %}
+                  {% set ftp_downloaded_count = item.get('ftp_downloaded_count', 0) %}
                   <td class="confidence-cell">
                     {% if ftp_batch %}
-                      <span class="confidence-badge confidence-high"
-                            title="{{ t('dashboard.confidence_title') }}">{{ ftp_batch|length }}/{{ item.episode_count }}</span>
+                      {% if confidence is not none %}
+                        <span class="confidence-badge {% if confidence >= 80 %}confidence-high{% elif confidence >= 60 %}confidence-medium{% else %}confidence-low{% endif %}"
+                              title="{{ ftp_batch|length }}/{{ item.episode_count }} épisode(s) trouvé(s) sur FTP">{{ confidence }}%</span>
+                      {% else %}<span class="ftp-badge">FTP</span>{% endif %}
+                      {% if ftp_downloaded_count > 0 %}
+                        <br><span class="muted" style="font-size:.75rem;">{{ ftp_downloaded_count }}/{{ ftp_batch|length }} déjà téléchargé(s)</span>
+                      {% endif %}
                     {% elif ftp_item and ftp_path %}
                       {% if confidence is not none %}
                         <span class="confidence-badge {% if confidence >= 80 %}confidence-high{% elif confidence >= 60 %}confidence-medium{% else %}confidence-low{% endif %}"
@@ -648,13 +654,18 @@ async function ignoreItem(title, type, btn) {
                     <div class="action-cell-inner">
                       <div class="ftp-action-group">
                         {% if ftp_batch %}
-                          <button class="btn btn-sm btn-ftp-download"
-                            data-batch="1"
-                            data-episodes='{{ ftp_batch | tojson }}'
-                            data-media-key="show:{{ item.title | e }}"
-                            data-job-ids="[]" data-status="idle"
-                            title="{{ ftp_batch|length }} épisode(s) trouvé(s) sur {{ item.episode_count }}"
-                            onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }} ({{ ftp_batch|length }})</button>
+                          {% set ftp_batch_pending = ftp_batch | rejectattr('already_downloaded') | list %}
+                          {% if ftp_batch_pending %}
+                            <button class="btn btn-sm btn-ftp-download"
+                              data-batch="1"
+                              data-episodes='{{ ftp_batch_pending | tojson }}'
+                              data-media-key="show:{{ item.title | e }}"
+                              data-job-ids="[]" data-status="idle"
+                              title="{{ ftp_batch_pending|length }} épisode(s) restant(s) à télécharger sur {{ ftp_batch|length }} trouvé(s)"
+                              onclick="handleFtpDownloadClick(this)">{{ t("dashboard.btn_ftp_download") }} ({{ ftp_batch_pending|length }})</button>
+                          {% else %}
+                            <span class="muted" style="font-size:.8rem;">Tout téléchargé ({{ ftp_batch|length }})</span>
+                          {% endif %}
                         {% elif ftp_item and ftp_path %}
                           <button type="button" class="queue-move-btn" onclick="moveUp('{{ job_id }}')" title="Monter dans la file">▲</button>
                           <button class="btn btn-sm btn-ftp-download"

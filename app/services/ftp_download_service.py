@@ -188,7 +188,8 @@ def _guess_series_folder_from_filename(filename):
     return name.strip()
 
 
-def _build_local_path(filename, media_type="movie", ftp_id=None, season=None, episode=None, series_title=None):
+def _build_local_path(filename, media_type="movie", ftp_id=None, season=None, episode=None, series_title=None,
+                       create_dirs=True):
     if not filename:
         raise ValueError("filename manquant")
 
@@ -260,12 +261,30 @@ def _build_local_path(filename, media_type="movie", ftp_id=None, season=None, ep
     else:
         local_dir = base_dir
 
-    os.makedirs(local_dir, exist_ok=True)
-    try:
-        os.chmod(local_dir, 0o777)
-    except Exception:
-        pass
+    if create_dirs:
+        os.makedirs(local_dir, exist_ok=True)
+        try:
+            os.chmod(local_dir, 0o777)
+        except Exception:
+            pass
     return os.path.join(local_dir, filename), filename
+
+
+def episode_already_downloaded(filename, ftp_id=None, season=None, episode=None, series_title=None):
+    """
+    Vérifie si le fichier local correspondant à cet épisode existe déjà sur disque,
+    sans créer de dossier (lecture seule) — utilisé pour afficher la progression
+    des téléchargements planifiés d'un jour à l'autre.
+    """
+    try:
+        local_path, _ = _build_local_path(
+            filename, media_type="episode", ftp_id=ftp_id,
+            season=season, episode=episode, series_title=series_title,
+            create_dirs=False,
+        )
+    except Exception:
+        return False
+    return os.path.isfile(local_path)
 
 
 def _get_ftp_config(ftp_id=None):
