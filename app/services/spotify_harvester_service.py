@@ -88,7 +88,9 @@ def build_command(
     if client_id and client_secret:
         cmd += ["--client-id", client_id, "--client-secret", client_secret]
 
-    cmd += ["download", "--user-auth"]
+    # La query (URL) doit suivre immédiatement l'opération "download", avant les options
+    # (syntaxe spotdl : `spotdl download <query> --option value ...`).
+    cmd += ["download", playlist["url"], "--user-auth"]
 
     if cookie_file:
         cmd += ["--cookie-file", cookie_file]
@@ -106,7 +108,6 @@ def build_command(
     if dry_run:
         cmd += ["--simple-tui"]
 
-    cmd += [playlist["url"]]
     return cmd
 
 
