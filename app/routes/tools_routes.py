@@ -33,6 +33,11 @@ from ..services.multi_audio_service import (
     check_multi_audio_deps,
     _parse_timecode,
 )
+from ..services.spotify_harvester_service import (
+    get_spotify_job_status,
+    start_spotify_job,
+    check_spotdl_available,
+)
 
 logger = logging.getLogger(__name__)
 tools_bp = Blueprint("tools", __name__)
@@ -81,6 +86,10 @@ def tools_page():
         multi_audio_deps=check_multi_audio_deps(),
         mediainfo_available=MEDIAINFO_AVAILABLE,
         ffmpeg_available=FFMPEG_AVAILABLE,
+        spotify_status=get_spotify_job_status(),
+        spotdl_available=check_spotdl_available(),
+        spotify_playlists=current_app.config.get("SPOTIFY_PLAYLISTS", []),
+        spotify_output_dir=current_app.config.get("SPOTIFY_OUTPUT_DIR", ""),
         error=error,
         active_tool=request.args.get("tool", "streaming"),
     )
@@ -145,6 +154,85 @@ def label_stream():
                 sent += 1
 
             yield f"data: {json.dumps({'type': 'status', 'running': status['running'], 'done': status['done'], 'total': status['total'], 'processed': status['processed'], 'labeled': status['labeled'], 'skipped': status['skipped'], 'errors': status['errors']})}\n\n"
+
+            if status["done"] and sent >= len(log):
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                break
+
+            time.sleep(1)
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ─── Spotify Harvester ──────────────────────────────────────────────────────
+
+@tools_bp.route("/tools/spotify/run", methods=["POST"])
+def spotify_run():
+    if not session.get("logged_in"):
+        return jsonify({"error": "non authentifié"}), 401
+
+    status = get_spotify_job_status()
+    if status["running"]:
+        return jsonify({"error": "job déjà en cours"}), 409
+
+    if not check_spotdl_available():
+        return jsonify({"error": "'spotdl' introuvable — rebuild l'image Docker."}), 400
+
+    cfg = current_app.config
+    playlists = cfg.get("SPOTIFY_PLAYLISTS") or []
+    if not playlists:
+        return jsonify({"error": "aucune playlist configurée (page Config > Musique)"}), 400
+
+    output_dir = cfg.get("SPOTIFY_OUTPUT_DIR", "")
+    if not output_dir:
+        return jsonify({"error": "dossier de destination non configuré (page Config > Musique)"}), 400
+
+    data = request.get_json(silent=True) or {}
+
+    started = start_spotify_job(
+        playlists=playlists,
+        output_dir=output_dir,
+        audio_format=cfg.get("SPOTIFY_FORMAT", "mp3"),
+        bitrate=cfg.get("SPOTIFY_BITRATE", "auto"),
+        threads=cfg.get("SPOTIFY_THREADS", 4),
+        client_id=cfg.get("SPOTIFY_CLIENT_ID", ""),
+        client_secret=cfg.get("SPOTIFY_CLIENT_SECRET", ""),
+        cookie_file=cfg.get("SPOTIFY_COOKIE_FILE", ""),
+        max_retries=cfg.get("SPOTIFY_MAX_RETRIES", 2),
+        dry_run=bool(data.get("dry_run", False)),
+    )
+    if not started:
+        return jsonify({"error": "job déjà en cours"}), 409
+    return jsonify({"ok": True})
+
+
+@tools_bp.route("/tools/spotify/status")
+def spotify_status():
+    if not session.get("logged_in"):
+        return jsonify({"error": "non authentifié"}), 401
+    return jsonify(get_spotify_job_status())
+
+
+@tools_bp.route("/tools/spotify/stream")
+def spotify_stream():
+    if not session.get("logged_in"):
+        return redirect(url_for("auth.login"))
+
+    def generate():
+        sent = 0
+        while True:
+            status = get_spotify_job_status()
+            log = status.get("log", [])
+
+            while sent < len(log):
+                yield f"data: {json.dumps({'type': 'log', 'msg': log[sent]})}\n\n"
+                sent += 1
+
+            yield f"data: {json.dumps({'type': 'status', 'running': status['running'], 'done': status['done'], 'total': status['total'], 'processed': status['processed'], 'success': status['success'], 'failed': status['failed']})}\n\n"
 
             if status["done"] and sent >= len(log):
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"

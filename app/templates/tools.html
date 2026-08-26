@@ -245,6 +245,10 @@
        class="tools-sidebar-item {% if active_tool == 'multi_audio' %}active{% endif %}">
       🎵 Multi Audio Merger
     </a>
+    <a href="{{ url_for('tools.tools_page', tool='spotify') }}"
+       class="tools-sidebar-item {% if active_tool == 'spotify' %}active{% endif %}">
+      🎧 Spotify Harvester
+    </a>
   </nav>
 
   <!-- Contenu principal -->
@@ -646,6 +650,69 @@
       <div class="log-box" id="da-log-box"></div>
     </div>
 
+    {% elif active_tool == 'spotify' %}
+    <!-- ======================== SPOTIFY HARVESTER ======================== -->
+    <div class="tools-title">🎧 Spotify Harvester</div>
+    <p style="color:#aaa;font-size:0.85rem;margin-bottom:1.25rem;">
+      Télécharge les playlists Spotify configurées vers ta bibliothèque musicale, organisées
+      au format Plex (Artiste/Album/NN - Titre). Basé sur <code>spotdl</code>.
+    </p>
+
+    {% if not spotdl_available %}
+    <div class="mediainfo-warn">
+      ⚠️ <strong>spotdl non disponible</strong> — rebuild l'image Docker pour l'activer.
+    </div>
+    {% endif %}
+
+    {% if not spotify_playlists %}
+    <div class="mediainfo-warn">
+      ⚠️ Aucune playlist configurée. Ajoute-en dans <a href="{{ url_for('config.config_page') }}#card-spotify">Config &gt; Musique (Spotify)</a>.
+    </div>
+    {% elif not spotify_output_dir %}
+    <div class="mediainfo-warn">
+      ⚠️ Dossier de destination non configuré. Renseigne-le dans <a href="{{ url_for('config.config_page') }}#card-spotify">Config &gt; Musique (Spotify)</a>.
+    </div>
+    {% endif %}
+
+    <div class="tools-section">
+      <div class="tools-section-label">Playlists configurées ({{ spotify_playlists|length }})</div>
+      {% if spotify_playlists %}
+        <ul style="margin:.4rem 0 0; padding-left:1.2rem; font-size:.85rem; color:#ccc;">
+          {% for pl in spotify_playlists %}
+            <li>{{ pl.name }} — <span style="color:#888;">{{ pl.url }}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted" style="font-size:.85rem;">Aucune.</p>
+      {% endif %}
+    </div>
+
+    <div class="tools-section">
+      <label class="opt-card" style="max-width:16rem;">
+        <input type="checkbox" id="opt-spotify-dryrun">
+        <span>Dry-run (affiche les commandes sans télécharger)</span>
+      </label>
+    </div>
+
+    <!-- Actions -->
+    <div class="tools-actions">
+      <button class="btn-run" id="btn-spotify"{% if not spotdl_available or not spotify_playlists or not spotify_output_dir %} disabled{% endif %}>▶ Lancer</button>
+      <span id="spotify-status-txt" style="font-size:0.82rem;color:#aaa;"></span>
+    </div>
+
+    <!-- Progression -->
+    <div id="spotify-progress-section" style="display:none;">
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="spotify-progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-stats">
+        <span><b id="sp-processed">0</b> / <b id="sp-total">0</b> playlists</span>
+        <span>✅ <b id="sp-success">0</b> réussies</span>
+        <span>❌ <b id="sp-failed">0</b> échouées</span>
+      </div>
+      <div class="log-box" id="spotify-log-box"></div>
+    </div>
+
     {% endif %}
   </main>
 </div>
@@ -1026,6 +1093,103 @@
       .catch(() => {
         statusTxt.textContent = '❌ Erreur réseau';
         btn.disabled = false;
+      });
+  });
+})();
+</script>
+{% endif %}
+{% if active_tool == 'spotify' %}
+<script>
+(function () {
+  const btnSpotify   = document.getElementById('btn-spotify');
+  if (!btnSpotify) return;
+  const statusTxt    = document.getElementById('spotify-status-txt');
+  const progressSec  = document.getElementById('spotify-progress-section');
+  const progressFill = document.getElementById('spotify-progress-fill');
+  const logBox       = document.getElementById('spotify-log-box');
+
+  let es = null;
+
+  function updateStats(data) {
+    document.getElementById('sp-processed').textContent = data.processed ?? 0;
+    document.getElementById('sp-total').textContent     = data.total ?? 0;
+    document.getElementById('sp-success').textContent   = data.success ?? 0;
+    document.getElementById('sp-failed').textContent    = data.failed ?? 0;
+    const pct = Math.round(((data.processed || 0) / (data.total || 1)) * 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  function appendLog(msg) {
+    const line = document.createElement('div');
+    if (msg.includes('succès') || msg.startsWith('✅')) line.className = 'log-ok';
+    else if (msg.startsWith('❌')) line.className = 'log-err';
+    else line.className = 'log-inf';
+    line.textContent = msg;
+    logBox.appendChild(line);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function startStream() {
+    if (es) { es.close(); es = null; }
+    es = new EventSource('/tools/spotify/stream');
+    es.onmessage = function (e) {
+      const data = JSON.parse(e.data);
+      if (data.type === 'log') { appendLog(data.msg); }
+      else if (data.type === 'status') { updateStats(data); }
+      else if (data.type === 'done') {
+        es.close(); es = null;
+        btnSpotify.disabled = false;
+        statusTxt.textContent = 'Terminé.';
+      }
+    };
+    es.onerror = function () {
+      es.close(); es = null;
+      btnSpotify.disabled = false;
+      statusTxt.textContent = 'Connexion interrompue.';
+    };
+  }
+
+  // Check job en cours au chargement
+  fetch('/tools/spotify/status')
+    .then(r => r.json())
+    .then(data => {
+      if (data.running) {
+        progressSec.style.display = 'block';
+        btnSpotify.disabled = true;
+        statusTxt.textContent = 'Job en cours…';
+        updateStats(data);
+        data.log.forEach(appendLog);
+        startStream();
+      }
+    });
+
+  btnSpotify.addEventListener('click', function () {
+    logBox.innerHTML = '';
+    progressFill.style.width = '0%';
+    progressSec.style.display = 'block';
+    btnSpotify.disabled = true;
+    statusTxt.textContent = 'Démarrage…';
+
+    fetch('/tools/spotify/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dry_run: document.getElementById('opt-spotify-dryrun').checked,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          statusTxt.textContent = '❌ ' + data.error;
+          btnSpotify.disabled = false;
+        } else {
+          statusTxt.textContent = 'En cours…';
+          startStream();
+        }
+      })
+      .catch(() => {
+        statusTxt.textContent = '❌ Erreur réseau';
+        btnSpotify.disabled = false;
       });
   });
 })();
