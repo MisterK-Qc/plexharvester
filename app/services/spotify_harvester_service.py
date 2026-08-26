@@ -146,18 +146,45 @@ def _run_playlist(playlist: dict, output_dir, audio_format, bitrate, threads,
     last_error = None
 
     for attempt in range(1, max_retries + 2):  # essai initial + retries
+        proc = None
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_S)
+            # Popen + lecture ligne par ligne : spotdl peut prendre plusieurs minutes
+            # (recherche + téléchargement + conversion par piste) sans jamais échouer —
+            # capturer la sortie en direct évite que le job ait l'air figé pendant ce temps.
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1,
+            )
+            output_lines = []
+            deadline = time.monotonic() + SUBPROCESS_TIMEOUT_S
+            timed_out = False
+
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    output_lines.append(line)
+                    _log(f"  {line}")
+                if time.monotonic() > deadline:
+                    timed_out = True
+                    proc.kill()
+                    break
+
+            returncode = proc.wait(timeout=30)
             duration = time.monotonic() - start
 
-            if proc.returncode == 0:
+            if timed_out:
+                raise subprocess.TimeoutExpired(cmd, SUBPROCESS_TIMEOUT_S)
+
+            if returncode == 0:
                 _log(f"Playlist '{display_name}' terminée avec succès (essai {attempt}, {duration:.1f}s).")
                 return {"name": display_name, "url": playlist["url"], "success": True, "duration_s": duration, "error": None, "attempts": attempt}
 
-            last_error = (proc.stderr or "").strip() or (proc.stdout or "").strip()
-            _log(f"Playlist '{display_name}' — échec essai {attempt}/{max_retries + 1} (code {proc.returncode}) : {last_error[-500:]}")
+            last_error = "\n".join(output_lines[-20:])
+            _log(f"Playlist '{display_name}' — échec essai {attempt}/{max_retries + 1} (code {returncode}).")
 
         except subprocess.TimeoutExpired:
+            if proc is not None:
+                proc.kill()
             last_error = f"Timeout après {SUBPROCESS_TIMEOUT_S}s (processus bloqué, ex: OAuth --user-auth en attente)"
             _log(f"Playlist '{display_name}' — {last_error}")
 
