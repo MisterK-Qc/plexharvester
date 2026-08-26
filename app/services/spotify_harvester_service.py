@@ -77,6 +77,7 @@ def build_command(
     client_secret: str = "",
     cookie_file: str = "",
     dry_run: bool = False,
+    user_auth: bool = False,
 ) -> list[str]:
     fmt = (playlist.get("format") or audio_format or "mp3").strip()
     br = (playlist.get("bitrate") or bitrate or "auto").strip()
@@ -90,7 +91,13 @@ def build_command(
 
     # La query (URL) doit suivre immédiatement l'opération "download", avant les options
     # (syntaxe spotdl : `spotdl download <query> --option value ...`).
-    cmd += ["download", playlist["url"], "--user-auth"]
+    cmd += ["download", playlist["url"]]
+
+    # --user-auth déclenche un flow OAuth navigateur interactif (bloquant en headless) —
+    # uniquement nécessaire pour les Liked Songs / playlists privées, jamais pour une
+    # playlist publique. Ne l'ajouter que si explicitement demandé.
+    if user_auth:
+        cmd += ["--user-auth"]
 
     if cookie_file:
         cmd += ["--cookie-file", cookie_file]
@@ -111,12 +118,15 @@ def build_command(
     return cmd
 
 
+SUBPROCESS_TIMEOUT_S = 7200  # garde-fou : ne devrait jamais être atteint par un téléchargement normal
+
+
 def _run_playlist(playlist: dict, output_dir, audio_format, bitrate, threads,
-                   client_id, client_secret, cookie_file, max_retries, dry_run) -> dict:
+                   client_id, client_secret, cookie_file, max_retries, dry_run, user_auth=False) -> dict:
     display_name = playlist.get("name") or playlist["url"]
     cmd = build_command(
         playlist, output_dir, audio_format, bitrate, threads,
-        client_id, client_secret, cookie_file, dry_run,
+        client_id, client_secret, cookie_file, dry_run, user_auth,
     )
 
     safe_cmd = [
@@ -134,7 +144,7 @@ def _run_playlist(playlist: dict, output_dir, audio_format, bitrate, threads,
 
     for attempt in range(1, max_retries + 2):  # essai initial + retries
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT_S)
             duration = time.monotonic() - start
 
             if proc.returncode == 0:
@@ -143,6 +153,10 @@ def _run_playlist(playlist: dict, output_dir, audio_format, bitrate, threads,
 
             last_error = (proc.stderr or "").strip() or (proc.stdout or "").strip()
             _log(f"Playlist '{display_name}' — échec essai {attempt}/{max_retries + 1} (code {proc.returncode}) : {last_error[-500:]}")
+
+        except subprocess.TimeoutExpired:
+            last_error = f"Timeout après {SUBPROCESS_TIMEOUT_S}s (processus bloqué, ex: OAuth --user-auth en attente)"
+            _log(f"Playlist '{display_name}' — {last_error}")
 
         except Exception as exc:
             last_error = str(exc)
@@ -176,7 +190,7 @@ def _write_report(results: list[dict]):
 
 
 def _worker(playlists, output_dir, audio_format, bitrate, threads,
-            client_id, client_secret, cookie_file, max_retries, dry_run):
+            client_id, client_secret, cookie_file, max_retries, dry_run, user_auth=False):
     with _spotify_lock:
         _spotify_status.update({
             "running": True, "done": False,
@@ -196,7 +210,7 @@ def _worker(playlists, output_dir, audio_format, bitrate, threads,
         for playlist in playlists:
             result = _run_playlist(
                 playlist, output_dir, audio_format, bitrate, threads,
-                client_id, client_secret, cookie_file, max_retries, dry_run,
+                client_id, client_secret, cookie_file, max_retries, dry_run, user_auth,
             )
             results.append(result)
             with _spotify_lock:
@@ -218,7 +232,7 @@ def _worker(playlists, output_dir, audio_format, bitrate, threads,
 
 def start_spotify_job(playlists, output_dir, audio_format="mp3", bitrate="auto", threads=4,
                        client_id="", client_secret="", cookie_file="", max_retries=2,
-                       dry_run=False) -> bool:
+                       dry_run=False, user_auth=False) -> bool:
     """Démarre un job de téléchargement en arrière-plan. Retourne False si un job tourne déjà."""
     with _spotify_lock:
         if _spotify_status["running"]:
@@ -227,7 +241,7 @@ def start_spotify_job(playlists, output_dir, audio_format="mp3", bitrate="auto",
     t = threading.Thread(
         target=_worker,
         args=(playlists, output_dir, audio_format, bitrate, threads,
-              client_id, client_secret, cookie_file, max_retries, dry_run),
+              client_id, client_secret, cookie_file, max_retries, dry_run, user_auth),
         daemon=True,
     )
     t.start()

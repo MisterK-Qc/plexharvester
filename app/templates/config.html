@@ -660,6 +660,19 @@
           <input type="text" id="spotify_cookie_file" name="spotify_cookie_file" value="{{ config.get('SPOTIFY_COOKIE_FILE','') }}" placeholder="/config/spotify_cookies.txt" spellcheck="false">
         </div>
 
+        <div style="margin-top:.5rem;">
+          <label class="checkbox-label">
+            <input type="checkbox" name="spotify_user_auth" id="spotify_user_auth"
+                   {% if config.get('SPOTIFY_USER_AUTH') %}checked{% endif %}>
+            Authentification utilisateur (--user-auth)
+          </label>
+          <p class="muted" style="margin:.3rem 0 0; font-size:.82rem;">
+            Uniquement pour accéder aux "Liked Songs" ou playlists privées liées à votre compte.
+            Déclenche un flow OAuth navigateur — ne fonctionne pas dans un container headless
+            sans autorisation préalable. Laissez décoché pour les playlists publiques (recommandé).
+          </p>
+        </div>
+
         <hr style="border:none;border-top:1px solid var(--border);margin:.75rem 0;">
 
         <div>

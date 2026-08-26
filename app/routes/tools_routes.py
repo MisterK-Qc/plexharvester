@@ -204,6 +204,7 @@ def spotify_run():
         cookie_file=cfg.get("SPOTIFY_COOKIE_FILE", ""),
         max_retries=cfg.get("SPOTIFY_MAX_RETRIES", 2),
         dry_run=bool(data.get("dry_run", False)),
+        user_auth=cfg.get("SPOTIFY_USER_AUTH", False),
     )
     if not started:
         return jsonify({"error": "job déjà en cours"}), 409

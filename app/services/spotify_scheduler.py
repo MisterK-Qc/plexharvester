@@ -108,6 +108,7 @@ def _run_auto(cfg):
         cookie_file=cfg.get("SPOTIFY_COOKIE_FILE", ""),
         max_retries=cfg.get("SPOTIFY_MAX_RETRIES", 2),
         dry_run=False,
+        user_auth=cfg.get("SPOTIFY_USER_AUTH", False),
     )
     if not started:
         logger.info("[SPOTIFY SCHEDULER] Job déjà en cours (race) — passage ignoré")

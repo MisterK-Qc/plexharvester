@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
     "SPOTIFY_CLIENT_ID": "",
     "SPOTIFY_CLIENT_SECRET": "",
     "SPOTIFY_COOKIE_FILE": "",
+    "SPOTIFY_USER_AUTH": False,
     "SPOTIFY_AUTO_ENABLED": False,
     "SPOTIFY_AUTO_SYNC_TIME": "04:00",
 }
@@ -282,6 +283,7 @@ def normalize_config(raw: dict | None) -> dict:
     cfg["SPOTIFY_CLIENT_ID"] = str(raw.get("SPOTIFY_CLIENT_ID", "") or "").strip()
     cfg["SPOTIFY_CLIENT_SECRET"] = str(raw.get("SPOTIFY_CLIENT_SECRET", "") or "").strip()
     cfg["SPOTIFY_COOKIE_FILE"] = str(raw.get("SPOTIFY_COOKIE_FILE", "") or "").strip()
+    cfg["SPOTIFY_USER_AUTH"] = _safe_bool(raw.get("SPOTIFY_USER_AUTH"), False)
     cfg["SPOTIFY_AUTO_ENABLED"] = _safe_bool(raw.get("SPOTIFY_AUTO_ENABLED"), False)
     cfg["SPOTIFY_AUTO_SYNC_TIME"] = str(raw.get("SPOTIFY_AUTO_SYNC_TIME", "04:00") or "04:00")
 
@@ -443,6 +445,7 @@ def build_config_from_form(form) -> dict:
         "SPOTIFY_CLIENT_ID": form.get("spotify_client_id", "").strip(),
         "SPOTIFY_CLIENT_SECRET": form.get("spotify_client_secret", "").strip(),
         "SPOTIFY_COOKIE_FILE": form.get("spotify_cookie_file", "").strip(),
+        "SPOTIFY_USER_AUTH": "spotify_user_auth" in form,
         "SPOTIFY_AUTO_ENABLED": "spotify_auto_enabled" in form,
         "SPOTIFY_AUTO_SYNC_TIME": form.get("spotify_auto_sync_time", "04:00"),
     })
