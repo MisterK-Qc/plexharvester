@@ -646,14 +646,19 @@
 
         <div class="row-inline" style="margin-top:.5rem;">
           <div style="flex:1">
-            <label for="spotify_client_id">Client ID Spotify (optionnel)</label>
-            <input type="text" id="spotify_client_id" name="spotify_client_id" value="{{ config.get('SPOTIFY_CLIENT_ID','') }}" placeholder="Identifiants partagés spotdl si vide" spellcheck="false">
+            <label for="spotify_client_id">Client ID Spotify</label>
+            <input type="text" id="spotify_client_id" name="spotify_client_id" value="{{ config.get('SPOTIFY_CLIENT_ID','') }}" placeholder="Depuis developer.spotify.com/dashboard" spellcheck="false">
           </div>
           <div style="flex:1">
-            <label for="spotify_client_secret">Client Secret Spotify (optionnel)</label>
+            <label for="spotify_client_secret">Client Secret Spotify</label>
             <input type="password" id="spotify_client_secret" name="spotify_client_secret" value="{{ config.get('SPOTIFY_CLIENT_SECRET','') }}" spellcheck="false">
           </div>
         </div>
+        <p class="muted" style="margin:.3rem 0 0; font-size:.82rem;">
+          Recommandé (Spotify a rendu le mode anonyme peu fiable) : créez une app sur
+          <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a>
+          pour obtenir vos identifiants.
+        </p>
 
         <div style="margin-top:.5rem;">
           <label for="spotify_cookie_file">Fichier cookies (optionnel, pour pistes/playlists privées)</label>

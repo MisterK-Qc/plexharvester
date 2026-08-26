@@ -87,7 +87,10 @@ def build_command(
     cmd: list[str] = [SPOTDL_BINARY]
 
     if client_id and client_secret:
-        cmd += ["--client-id", client_id, "--client-secret", client_secret]
+        # Sans --use-official-api, spotdl ignore les identifiants fournis et utilise par
+        # défaut le client anonyme "SpotipyFree" (limité, cassé par les derniers changements
+        # de l'API Spotify — cause de "BaseClientError: Could not get session auth tokens").
+        cmd += ["--client-id", client_id, "--client-secret", client_secret, "--use-official-api"]
 
     # La query (URL) doit suivre immédiatement l'opération "download", avant les options
     # (syntaxe spotdl : `spotdl download <query> --option value ...`).
