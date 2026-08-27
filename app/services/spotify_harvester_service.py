@@ -11,6 +11,7 @@ d'un fichier YAML séparé.
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import threading
@@ -202,6 +203,29 @@ def _run_playlist(playlist: dict, output_dir, audio_format, bitrate, threads,
     return {"name": display_name, "url": playlist["url"], "success": False, "duration_s": duration, "error": last_error, "attempts": attempt}
 
 
+def _fix_output_permissions(output_dir):
+    """
+    spotdl (souvent root dans le container) crée dossiers/fichiers avec des permissions
+    restrictives par défaut — ouvre tout en 777/666 pour qu'un utilisateur SMB Windows
+    puisse ensuite les gérer/supprimer (même logique que le téléchargement FTP).
+    """
+    try:
+        os.chmod(output_dir, 0o777)
+        for root, dirs, files in os.walk(output_dir):
+            for d in dirs:
+                try:
+                    os.chmod(os.path.join(root, d), 0o777)
+                except Exception:
+                    pass
+            for f in files:
+                try:
+                    os.chmod(os.path.join(root, f), 0o666)
+                except Exception:
+                    pass
+    except Exception:
+        logger.warning("[SPOTIFY] Impossible de corriger les permissions de %s", output_dir, exc_info=True)
+
+
 def _write_report(results: list[dict]):
     report_path = Path(LOG_DIR) / f"spotify_rapport_{datetime.now():%Y%m%d_%H%M%S}.json"
     payload = {
@@ -253,6 +277,7 @@ def _worker(playlists, output_dir, audio_format, bitrate, threads,
                     _spotify_status["failed"] += 1
 
         if not dry_run:
+            _fix_output_permissions(output_dir)
             _write_report(results)
 
     except Exception:
