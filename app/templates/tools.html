@@ -247,7 +247,7 @@
     </a>
     <a href="{{ url_for('tools.tools_page', tool='spotify') }}"
        class="tools-sidebar-item {% if active_tool == 'spotify' %}active{% endif %}">
-      🎧 Spotify Harvester
+      🎧 Téléchargement Spotify
     </a>
   </nav>
 
@@ -651,11 +651,11 @@
     </div>
 
     {% elif active_tool == 'spotify' %}
-    <!-- ======================== SPOTIFY HARVESTER ======================== -->
-    <div class="tools-title">🎧 Spotify Harvester</div>
+    <!-- ======================== TÉLÉCHARGEMENT SPOTIFY ======================== -->
+    <div class="tools-title">🎧 Téléchargement Spotify</div>
     <p style="color:#aaa;font-size:0.85rem;margin-bottom:1.25rem;">
-      Télécharge les playlists Spotify configurées vers ta bibliothèque musicale, organisées
-      au format Plex (Artiste/Album/NN - Titre). Basé sur <code>spotdl</code>.
+      Colle un ou plusieurs liens Spotify (piste, album, playlist) à télécharger vers ta
+      bibliothèque musicale, organisés au format Plex (Artiste/Album/NN - Titre). Basé sur <code>spotdl</code>.
     </p>
 
     {% if not spotdl_available %}
@@ -664,27 +664,17 @@
     </div>
     {% endif %}
 
-    {% if not spotify_playlists %}
+    {% if not spotify_output_dir %}
     <div class="mediainfo-warn">
-      ⚠️ Aucune playlist configurée. Ajoute-en dans <a href="{{ url_for('config.config_page') }}#card-spotify">Config &gt; Musique (Spotify)</a>.
-    </div>
-    {% elif not spotify_output_dir %}
-    <div class="mediainfo-warn">
-      ⚠️ Dossier de destination non configuré. Renseigne-le dans <a href="{{ url_for('config.config_page') }}#card-spotify">Config &gt; Musique (Spotify)</a>.
+      ⚠️ Dossier de destination non configuré. Renseigne-le dans <a href="{{ url_for('config.config_page') }}#card-spotify">Config &gt; Téléchargement Spotify</a>.
     </div>
     {% endif %}
 
     <div class="tools-section">
-      <div class="tools-section-label">Playlists configurées ({{ spotify_playlists|length }})</div>
-      {% if spotify_playlists %}
-        <ul style="margin:.4rem 0 0; padding-left:1.2rem; font-size:.85rem; color:#ccc;">
-          {% for pl in spotify_playlists %}
-            <li>{{ pl.name }} — <span style="color:#888;">{{ pl.url }}</span></li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p class="muted" style="font-size:.85rem;">Aucune.</p>
-      {% endif %}
+      <div class="tools-section-label">Lien(s) Spotify (un par ligne)</div>
+      <textarea id="spotify-urls" class="path-input" rows="5" spellcheck="false"
+                placeholder="https://open.spotify.com/playlist/...&#10;https://open.spotify.com/track/...&#10;https://open.spotify.com/album/..."
+                style="width:100%;font-family:monospace;font-size:.85rem;resize:vertical;"></textarea>
     </div>
 
     <div class="tools-section">
@@ -696,7 +686,7 @@
 
     <!-- Actions -->
     <div class="tools-actions">
-      <button class="btn-run" id="btn-spotify"{% if not spotdl_available or not spotify_playlists or not spotify_output_dir %} disabled{% endif %}>▶ Lancer</button>
+      <button class="btn-run" id="btn-spotify"{% if not spotdl_available or not spotify_output_dir %} disabled{% endif %}>▶ Lancer</button>
       <span id="spotify-status-txt" style="font-size:0.82rem;color:#aaa;"></span>
     </div>
 
@@ -1164,6 +1154,16 @@
     });
 
   btnSpotify.addEventListener('click', function () {
+    const urls = document.getElementById('spotify-urls').value
+      .split('\n')
+      .map(u => u.trim())
+      .filter(u => u.length > 0);
+
+    if (!urls.length) {
+      statusTxt.textContent = '❌ Colle au moins un lien Spotify.';
+      return;
+    }
+
     logBox.innerHTML = '';
     progressFill.style.width = '0%';
     progressSec.style.display = 'block';
@@ -1174,6 +1174,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        urls: urls,
         dry_run: document.getElementById('opt-spotify-dryrun').checked,
       }),
     })

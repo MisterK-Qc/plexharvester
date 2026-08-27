@@ -88,7 +88,6 @@ def tools_page():
         ffmpeg_available=FFMPEG_AVAILABLE,
         spotify_status=get_spotify_job_status(),
         spotdl_available=check_spotdl_available(),
-        spotify_playlists=current_app.config.get("SPOTIFY_PLAYLISTS", []),
         spotify_output_dir=current_app.config.get("SPOTIFY_OUTPUT_DIR", ""),
         error=error,
         active_tool=request.args.get("tool", "streaming"),
@@ -183,15 +182,20 @@ def spotify_run():
         return jsonify({"error": "'spotdl' introuvable — rebuild l'image Docker."}), 400
 
     cfg = current_app.config
-    playlists = cfg.get("SPOTIFY_PLAYLISTS") or []
-    if not playlists:
-        return jsonify({"error": "aucune playlist configurée (page Config > Musique)"}), 400
-
     output_dir = cfg.get("SPOTIFY_OUTPUT_DIR", "")
     if not output_dir:
-        return jsonify({"error": "dossier de destination non configuré (page Config > Musique)"}), 400
+        return jsonify({"error": "dossier de destination non configuré (page Config > Téléchargement Spotify)"}), 400
 
     data = request.get_json(silent=True) or {}
+
+    urls = [str(u).strip() for u in (data.get("urls") or []) if str(u).strip()]
+    if not urls:
+        return jsonify({"error": "aucun lien Spotify fourni"}), 400
+
+    playlists = [
+        {"url": u, "name": f"Lien {i + 1}", "format": "", "bitrate": ""}
+        for i, u in enumerate(urls)
+    ]
 
     started = start_spotify_job(
         playlists=playlists,

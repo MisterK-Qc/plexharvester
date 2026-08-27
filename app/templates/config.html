@@ -564,53 +564,19 @@
       </div>
     </div>
 
-    <!-- ── Card: Musique (Spotify) ──────────────────────────────────────────── -->
+    <!-- ── Card: Téléchargement Spotify ─────────────────────────────────────── -->
     <div class="config-card" id="card-spotify" draggable="false">
       <div class="card-header">
         <span class="drag-handle" title="{{ t('config.drag_handle_title') }}">⠿</span>
-        <span class="card-title">🎧 Musique (Spotify)</span>
+        <span class="card-title">🎧 Téléchargement Spotify</span>
       </div>
       <div class="card-body">
         <p class="muted" style="font-size:.82rem; margin:0 0 .3rem;">
-          Télécharge des playlists Spotify vers ta bibliothèque musicale via <code>spotdl</code>.
-          Lancement manuel depuis la page Outils, ou automatique ci-dessous.
+          Réglages pour l'outil "Téléchargement Spotify" (page Outils) via <code>spotdl</code>.
+          Le lien à télécharger se saisit directement sur cette page-là, pas ici.
         </p>
 
         <div>
-          <label>Playlists</label>
-          <div id="spotify-playlists-list" class="stack" style="margin-top:.4rem;">
-            {% for pl in config.get('SPOTIFY_PLAYLISTS', []) %}
-              <div class="row-inline spotify-playlist-row">
-                <input type="text" name="spotify_playlist_urls[]" value="{{ pl.url }}" placeholder="URL playlist Spotify" spellcheck="false" style="flex:2">
-                <input type="text" name="spotify_playlist_names[]" value="{{ pl.name }}" placeholder="Nom (optionnel)" spellcheck="false" style="flex:1">
-                <select name="spotify_playlist_formats[]" style="flex:1">
-                  <option value="" {% if not pl.format %}selected{% endif %}>Format par défaut</option>
-                  {% for fmt in ['mp3','flac','m4a','ogg','opus','wav'] %}
-                    <option value="{{ fmt }}" {% if pl.format == fmt %}selected{% endif %}>{{ fmt }}</option>
-                  {% endfor %}
-                </select>
-                <input type="text" name="spotify_playlist_bitrates[]" value="{{ pl.bitrate }}" placeholder="Bitrate (optionnel)" spellcheck="false" style="flex:1">
-                <button type="button" class="button-secondary remove-row">Supprimer</button>
-              </div>
-            {% else %}
-              <div class="row-inline spotify-playlist-row">
-                <input type="text" name="spotify_playlist_urls[]" placeholder="URL playlist Spotify" spellcheck="false" style="flex:2">
-                <input type="text" name="spotify_playlist_names[]" placeholder="Nom (optionnel)" spellcheck="false" style="flex:1">
-                <select name="spotify_playlist_formats[]" style="flex:1">
-                  <option value="" selected>Format par défaut</option>
-                  {% for fmt in ['mp3','flac','m4a','ogg','opus','wav'] %}
-                    <option value="{{ fmt }}">{{ fmt }}</option>
-                  {% endfor %}
-                </select>
-                <input type="text" name="spotify_playlist_bitrates[]" placeholder="Bitrate (optionnel)" spellcheck="false" style="flex:1">
-                <button type="button" class="button-secondary remove-row">Supprimer</button>
-              </div>
-            {% endfor %}
-          </div>
-          <button type="button" id="add-spotify-playlist" class="button-primary" style="margin-top:.5rem;">+ Ajouter une playlist</button>
-        </div>
-
-        <div style="margin-top:.75rem;">
           <label for="spotify_output_dir">Dossier de destination</label>
           <input type="text" id="spotify_output_dir" name="spotify_output_dir"
                  value="{{ config.get('SPOTIFY_OUTPUT_DIR','') }}"
@@ -676,23 +642,6 @@
             Déclenche un flow OAuth navigateur — ne fonctionne pas dans un container headless
             sans autorisation préalable. Laissez décoché pour les playlists publiques (recommandé).
           </p>
-        </div>
-
-        <hr style="border:none;border-top:1px solid var(--border);margin:.75rem 0;">
-
-        <div>
-          <label class="checkbox-label">
-            <input type="checkbox" name="spotify_auto_enabled" id="spotify_auto_enabled"
-                   {% if config.get('SPOTIFY_AUTO_ENABLED') %}checked{% endif %}>
-            Lancement automatique quotidien
-          </label>
-          <div class="row-inline" style="margin-top:.4rem;">
-            <div>
-              <label for="spotify_auto_sync_time">Heure de lancement</label>
-              <input type="time" id="spotify_auto_sync_time" name="spotify_auto_sync_time"
-                     value="{{ config.get('SPOTIFY_AUTO_SYNC_TIME','04:00') }}">
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -1048,13 +997,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const v = row.querySelector('input[name="dest_values[]"]');
       if (k && v && k.value.trim() === '' && v.value.trim() === '') row.remove();
     });
-    const spotifyList = document.getElementById('spotify-playlists-list');
-    if (spotifyList) {
-      Array.from(spotifyList.children).forEach(row => {
-        const u = row.querySelector('input[name="spotify_playlist_urls[]"]');
-        if (u && u.value.trim() === '') row.remove();
-      });
-    }
   }
 
   // ── Multi-FTP helpers ──────────────────────────────────────────────────────
@@ -1280,18 +1222,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
       <input type="hidden" name="dest_keys[]" value="">
       <input type="text" name="dest_values[]" placeholder="${_i18n.mkv_dest_placeholder}" spellcheck="false" style="flex:1">
       <button type="button" class="button-secondary remove-row">${_i18n.mkv_dest_delete}</button></div>`);
-  });
-
-  document.getElementById('add-spotify-playlist')?.addEventListener('click', ()=>{
-    const list = document.getElementById('spotify-playlists-list');
-    const fmtOptions = ['mp3','flac','m4a','ogg','opus','wav']
-      .map(fmt => `<option value="${fmt}">${fmt}</option>`).join('');
-    list.insertAdjacentHTML('beforeend', `<div class="row-inline spotify-playlist-row">
-      <input type="text" name="spotify_playlist_urls[]" placeholder="URL playlist Spotify" spellcheck="false" style="flex:2">
-      <input type="text" name="spotify_playlist_names[]" placeholder="Nom (optionnel)" spellcheck="false" style="flex:1">
-      <select name="spotify_playlist_formats[]" style="flex:1"><option value="" selected>Format par défaut</option>${fmtOptions}</select>
-      <input type="text" name="spotify_playlist_bitrates[]" placeholder="Bitrate (optionnel)" spellcheck="false" style="flex:1">
-      <button type="button" class="button-secondary remove-row">Supprimer</button></div>`);
   });
 
   document.getElementById('add-ftp-server-btn')?.addEventListener('click', ()=>{

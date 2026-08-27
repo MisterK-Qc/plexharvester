@@ -62,7 +62,6 @@ DEFAULT_CONFIG = {
     "PLAYLIST_AUTO_PUSH_SYNC": False,
     "PLEX_TOKEN_SCHEDULER":    "",
 
-    "SPOTIFY_PLAYLISTS": [],          # [{url, name, format, bitrate}]
     "SPOTIFY_OUTPUT_DIR": "",
     "SPOTIFY_FORMAT": "mp3",
     "SPOTIFY_BITRATE": "auto",
@@ -72,8 +71,6 @@ DEFAULT_CONFIG = {
     "SPOTIFY_CLIENT_SECRET": "",
     "SPOTIFY_COOKIE_FILE": "",
     "SPOTIFY_USER_AUTH": False,
-    "SPOTIFY_AUTO_ENABLED": False,
-    "SPOTIFY_AUTO_SYNC_TIME": "04:00",
 }
 
 
@@ -101,17 +98,6 @@ def _safe_bool(value, default=False):
 
 
 _SPOTIFY_FORMATS = {"mp3", "flac", "m4a", "ogg", "opus", "wav"}
-
-
-def _normalize_spotify_playlist(raw: dict, idx: int) -> dict:
-    """Normalise une playlist Spotify individuelle."""
-    fmt = str(raw.get("format") or "").strip().lower()
-    return {
-        "url":     str(raw.get("url") or "").strip(),
-        "name":    str(raw.get("name") or "").strip() or f"Playlist {idx + 1}",
-        "format":  fmt if fmt in _SPOTIFY_FORMATS else "",
-        "bitrate": str(raw.get("bitrate") or "").strip(),
-    }
 
 
 def _normalize_ftp_server(raw: dict, idx: int) -> dict:
@@ -264,16 +250,7 @@ def normalize_config(raw: dict | None) -> dict:
     cfg["PLAYLIST_AUTO_PUSH_SYNC"] = _safe_bool(raw.get("PLAYLIST_AUTO_PUSH_SYNC"), False)
     cfg["PLEX_TOKEN_SCHEDULER"]    = str(raw.get("PLEX_TOKEN_SCHEDULER", "") or "")
 
-    # ── Spotify Harvester ────────────────────────────────────────────────────
-    raw_playlists = raw.get("SPOTIFY_PLAYLISTS")
-    if isinstance(raw_playlists, list):
-        cfg["SPOTIFY_PLAYLISTS"] = [
-            _normalize_spotify_playlist(p, i) for i, p in enumerate(raw_playlists)
-            if isinstance(p, dict) and str(p.get("url") or "").strip()
-        ]
-    else:
-        cfg["SPOTIFY_PLAYLISTS"] = []
-
+    # ── Téléchargement Spotify ───────────────────────────────────────────────
     cfg["SPOTIFY_OUTPUT_DIR"] = str(raw.get("SPOTIFY_OUTPUT_DIR", "") or "").strip()
     _sfmt = str(raw.get("SPOTIFY_FORMAT", "mp3") or "mp3").strip().lower()
     cfg["SPOTIFY_FORMAT"] = _sfmt if _sfmt in _SPOTIFY_FORMATS else "mp3"
@@ -284,8 +261,6 @@ def normalize_config(raw: dict | None) -> dict:
     cfg["SPOTIFY_CLIENT_SECRET"] = str(raw.get("SPOTIFY_CLIENT_SECRET", "") or "").strip()
     cfg["SPOTIFY_COOKIE_FILE"] = str(raw.get("SPOTIFY_COOKIE_FILE", "") or "").strip()
     cfg["SPOTIFY_USER_AUTH"] = _safe_bool(raw.get("SPOTIFY_USER_AUTH"), False)
-    cfg["SPOTIFY_AUTO_ENABLED"] = _safe_bool(raw.get("SPOTIFY_AUTO_ENABLED"), False)
-    cfg["SPOTIFY_AUTO_SYNC_TIME"] = str(raw.get("SPOTIFY_AUTO_SYNC_TIME", "04:00") or "04:00")
 
     return cfg
 
@@ -427,16 +402,6 @@ def build_config_from_form(form) -> dict:
         # PLEX_TOKEN_SCHEDULER est géré séparément (auto-sauvegarde au login)
         # On le préserve depuis la config existante via update_config_key
 
-        "SPOTIFY_PLAYLISTS": [
-            {"url": u.strip(), "name": n.strip(), "format": f.strip(), "bitrate": b.strip()}
-            for u, n, f, b in zip(
-                form.getlist("spotify_playlist_urls[]"),
-                form.getlist("spotify_playlist_names[]"),
-                form.getlist("spotify_playlist_formats[]"),
-                form.getlist("spotify_playlist_bitrates[]"),
-            )
-            if u.strip()
-        ],
         "SPOTIFY_OUTPUT_DIR": form.get("spotify_output_dir", "").strip(),
         "SPOTIFY_FORMAT": form.get("spotify_format", "mp3"),
         "SPOTIFY_BITRATE": form.get("spotify_bitrate", "auto").strip(),
@@ -446,6 +411,4 @@ def build_config_from_form(form) -> dict:
         "SPOTIFY_CLIENT_SECRET": form.get("spotify_client_secret", "").strip(),
         "SPOTIFY_COOKIE_FILE": form.get("spotify_cookie_file", "").strip(),
         "SPOTIFY_USER_AUTH": "spotify_user_auth" in form,
-        "SPOTIFY_AUTO_ENABLED": "spotify_auto_enabled" in form,
-        "SPOTIFY_AUTO_SYNC_TIME": form.get("spotify_auto_sync_time", "04:00"),
     })
