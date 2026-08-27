@@ -23,7 +23,9 @@ from app.config_paths import LOG_DIR, SPOTIFY_ARCHIVE_FILE
 logger = logging.getLogger(__name__)
 
 # Gabarit de sortie standard Plex Music : Artiste/Album/NN - Titre.ext
-PLEX_OUTPUT_TEMPLATE = "{artist}/{album}/{track-number:02d} - {title}.{output-ext}"
+# Note : spotdl ne supporte pas les format-specs Python ({track-number:02d}) —
+# {track-number} seul est déjà zero-paddé nativement par spotdl (ex: "06").
+PLEX_OUTPUT_TEMPLATE = "{artist}/{album}/{track-number} - {title}.{output-ext}"
 
 SUPPORTED_FORMATS = {"mp3", "flac", "m4a", "ogg", "opus", "wav"}
 
