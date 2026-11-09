@@ -152,7 +152,7 @@ def label_stream():
                 yield f"data: {json.dumps({'type': 'log', 'msg': log[sent]})}\n\n"
                 sent += 1
 
-            yield f"data: {json.dumps({'type': 'status', 'running': status['running'], 'done': status['done'], 'total': status['total'], 'processed': status['processed'], 'labeled': status['labeled'], 'skipped': status['skipped'], 'errors': status['errors']})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'running': status['running'], 'done': status['done'], 'total': status['total'], 'processed': status['processed'], 'labeled': status['labeled'], 'skipped': status['skipped'], 'already_labeled': status['already_labeled'], 'errors': status['errors']})}\n\n"
 
             if status["done"] and sent >= len(log):
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"

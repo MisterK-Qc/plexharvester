@@ -166,6 +166,34 @@
             </p>
           </div>
         </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0;">
+
+        <div>
+          <label class="checkbox-label">
+            <input type="checkbox" name="streaming_label_auto_sync" id="streaming_label_auto_sync"
+                   {% if config.get('STREAMING_LABEL_AUTO_SYNC') %}checked{% endif %}>
+            Vérification automatique des étiquettes streaming
+          </label>
+          <p class="muted" style="margin:.3rem 0 .5rem; font-size:.82rem;">
+            Lance l'outil « Étiquettes streaming » (page Outils) une fois par jour sur toutes les
+            bibliothèques films/séries. Un item déjà étiqueté n'est jamais retouché — seuls les
+            nouveaux items sont vérifiés. Utilise le même token Plex (scheduler) que la synchro playlists.
+          </p>
+          <div class="row-inline" style="align-items:flex-end;gap:.75rem;">
+            <div>
+              <label for="streaming_label_auto_sync_time">Heure de vérification</label>
+              <input type="time" id="streaming_label_auto_sync_time" name="streaming_label_auto_sync_time"
+                     value="{{ config.get('STREAMING_LABEL_AUTO_SYNC_TIME','02:00') }}">
+            </div>
+            <div style="flex:1">
+              <label>Token Plex (scheduler)</label>
+              <input type="text" readonly
+                     value="{{ '● Enregistré' if config.get('PLEX_TOKEN_SCHEDULER') else '✗ Non enregistré — connecte-toi pour le sauvegarder' }}"
+                     style="color:{{ '#4caf50' if config.get('PLEX_TOKEN_SCHEDULER') else '#f44336' }};cursor:default;">
+            </div>
+          </div>
+        </div>
         {% if is_logged_in and plex_libraries %}
         <div>
           <label>{{ t("config.library_list_header") }}</label>

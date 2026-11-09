@@ -236,5 +236,7 @@ def create_app():
             setup_auto_mkv_hook(app)
             from .services.playlist_scheduler import start_playlist_scheduler
             start_playlist_scheduler(app)
+            from .services.streaming_label_scheduler import start_streaming_label_scheduler
+            start_streaming_label_scheduler(app)
 
     return app

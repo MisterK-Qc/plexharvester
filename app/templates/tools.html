@@ -259,8 +259,9 @@
     <div class="tools-title">🏷️ Étiquettes streaming Plex</div>
     <p style="color:#aaa;font-size:0.85rem;margin-bottom:1.5rem;">
       Interroge TMDb par item pour ajouter automatiquement les étiquettes de service streaming
-      (Netflix, Prime Video, Disney+…) dans Plex. Compatible avec les collections Kometa
-      basées sur <code>plex_search: label: X</code>.
+      (Netflix, Prime Video, Disney+…) dans Plex. Compatible avec les collections et l'overlay
+      Kometa basés sur <code>plex_search: label: X</code>. Un item déjà étiqueté n'est plus
+      jamais retouché — chaque item n'est vérifié qu'une seule fois.
     </p>
 
     {% if error %}
@@ -314,6 +315,7 @@
       <div class="progress-stats">
         <span><b id="stat-processed">0</b> / <b id="stat-total">0</b> traités</span>
         <span>✅ <b id="stat-labeled">0</b> labellisés</span>
+        <span>🔒 <b id="stat-already-labeled">0</b> déjà étiquetés</span>
         <span>⏭ <b id="stat-skipped">0</b> sans ID</span>
         <span>❌ <b id="stat-errors">0</b> erreurs</span>
       </div>
@@ -1218,6 +1220,7 @@
     document.getElementById('stat-processed').textContent = data.processed ?? 0;
     document.getElementById('stat-total').textContent = data.total ?? 0;
     document.getElementById('stat-labeled').textContent = data.labeled ?? 0;
+    document.getElementById('stat-already-labeled').textContent = data.already_labeled ?? 0;
     document.getElementById('stat-skipped').textContent = data.skipped ?? 0;
     document.getElementById('stat-errors').textContent = data.errors ?? 0;
     const total = data.total || 1;

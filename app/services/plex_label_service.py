@@ -56,6 +56,7 @@ _job_status = {
     "processed": 0,
     "labeled": 0,
     "skipped": 0,
+    "already_labeled": 0,
     "errors": 0,
     "log": [],
 }
@@ -134,7 +135,7 @@ def _get_streaming_labels(tmdb_id, media_type, api_key, watch_region, providers)
 
 def _worker(plex_token, api_key, library_configs, watch_region, providers):
     _update(running=True, done=False, total=0, processed=0,
-            labeled=0, skipped=0, errors=0, log=[])
+            labeled=0, skipped=0, already_labeled=0, errors=0, log=[])
     try:
         account = MyPlexAccount(token=plex_token)
         server = next(
@@ -160,11 +161,21 @@ def _worker(plex_token, api_key, library_configs, watch_region, providers):
         _update(total=len(all_items))
         _log(f"▶ {len(all_items)} item(s) dans {len(library_configs)} bibliothèque(s)")
 
-        labeled = skipped = errors = 0
+        labeled = skipped = already_labeled = errors = 0
 
         for i, (item, media_type) in enumerate(all_items):
             try:
                 existing = {lbl.tag for lbl in item.labels}
+
+                # Déjà étiqueté lors d'un run précédent : l'étiquette de service streaming
+                # ne doit être posée qu'une seule fois (à la première vérification de l'item).
+                # On ne la retouche jamais après ça, même si le service disponible change sur
+                # TMDb — seul un retrait manuel de l'étiquette dans Plex permet de re-vérifier.
+                if existing & set(STREAMING_PROVIDERS_CA.values()):
+                    already_labeled += 1
+                    _update(processed=i + 1, already_labeled=already_labeled)
+                    time.sleep(0.05)
+                    continue
 
                 # Étape 1 : tag scène dans le nom de fichier (priorité)
                 label = _get_label_from_filename(item, providers)
@@ -182,7 +193,7 @@ def _worker(plex_token, api_key, library_configs, watch_region, providers):
                     label = next(iter(services), None)
                     source = "TMDb"
 
-                if label and label not in existing:
+                if label:
                     item.addLabel(label)
                     labeled += 1
                     _log(f"✅ {item.title} → {label} ({source})")
@@ -196,7 +207,7 @@ def _worker(plex_token, api_key, library_configs, watch_region, providers):
 
             time.sleep(0.25)
 
-        _log(f"✔ Terminé — {labeled} labellisés, {skipped} sans ID TMDb, {errors} erreur(s)")
+        _log(f"✔ Terminé — {labeled} labellisés, {already_labeled} déjà étiquetés, {skipped} sans ID TMDb, {errors} erreur(s)")
 
     except Exception as e:
         _log(f"❌ Erreur fatale: {e}")
