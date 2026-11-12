@@ -176,15 +176,17 @@
             Vérification automatique des étiquettes streaming
           </label>
           <p class="muted" style="margin:.3rem 0 .5rem; font-size:.82rem;">
-            Lance l'outil « Étiquettes streaming » (page Outils) une fois par jour sur toutes les
+            Lance l'outil « Étiquettes streaming » (page Outils) à intervalle régulier sur toutes les
             bibliothèques films/séries. Un item déjà étiqueté n'est jamais retouché — seuls les
-            nouveaux items sont vérifiés. Utilise le même token Plex (scheduler) que la synchro playlists.
+            nouveaux items sont vérifiés, donc un intervalle court a un coût négligeable. Utilise le
+            même token Plex (scheduler) que la synchro playlists.
           </p>
           <div class="row-inline" style="align-items:flex-end;gap:.75rem;">
             <div>
-              <label for="streaming_label_auto_sync_time">Heure de vérification</label>
-              <input type="time" id="streaming_label_auto_sync_time" name="streaming_label_auto_sync_time"
-                     value="{{ config.get('STREAMING_LABEL_AUTO_SYNC_TIME','02:00') }}">
+              <label for="streaming_label_auto_sync_interval">Intervalle (minutes)</label>
+              <input type="number" id="streaming_label_auto_sync_interval" name="streaming_label_auto_sync_interval"
+                     min="15" step="15"
+                     value="{{ config.get('STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES',60) }}">
             </div>
             <div style="flex:1">
               <label>Token Plex (scheduler)</label>

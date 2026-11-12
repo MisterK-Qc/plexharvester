@@ -62,8 +62,8 @@ DEFAULT_CONFIG = {
     "PLAYLIST_AUTO_PUSH_SYNC": False,
     "PLEX_TOKEN_SCHEDULER":    "",
 
-    "STREAMING_LABEL_AUTO_SYNC":      False,
-    "STREAMING_LABEL_AUTO_SYNC_TIME": "02:00",
+    "STREAMING_LABEL_AUTO_SYNC":                    False,
+    "STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES":   60,
 
     "SPOTIFY_OUTPUT_DIR": "",
     "SPOTIFY_FORMAT": "mp3",
@@ -253,8 +253,10 @@ def normalize_config(raw: dict | None) -> dict:
     cfg["PLAYLIST_AUTO_PUSH_SYNC"] = _safe_bool(raw.get("PLAYLIST_AUTO_PUSH_SYNC"), False)
     cfg["PLEX_TOKEN_SCHEDULER"]    = str(raw.get("PLEX_TOKEN_SCHEDULER", "") or "")
 
-    cfg["STREAMING_LABEL_AUTO_SYNC"]      = _safe_bool(raw.get("STREAMING_LABEL_AUTO_SYNC"), False)
-    cfg["STREAMING_LABEL_AUTO_SYNC_TIME"] = str(raw.get("STREAMING_LABEL_AUTO_SYNC_TIME", "02:00") or "02:00")
+    cfg["STREAMING_LABEL_AUTO_SYNC"] = _safe_bool(raw.get("STREAMING_LABEL_AUTO_SYNC"), False)
+    cfg["STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES"] = _safe_int(
+        raw.get("STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES"), 60
+    )
 
     # ── Téléchargement Spotify ───────────────────────────────────────────────
     cfg["SPOTIFY_OUTPUT_DIR"] = str(raw.get("SPOTIFY_OUTPUT_DIR", "") or "").strip()
@@ -408,8 +410,8 @@ def build_config_from_form(form) -> dict:
         # PLEX_TOKEN_SCHEDULER est géré séparément (auto-sauvegarde au login)
         # On le préserve depuis la config existante via update_config_key
 
-        "STREAMING_LABEL_AUTO_SYNC":      "streaming_label_auto_sync" in form,
-        "STREAMING_LABEL_AUTO_SYNC_TIME": form.get("streaming_label_auto_sync_time", "02:00"),
+        "STREAMING_LABEL_AUTO_SYNC": "streaming_label_auto_sync" in form,
+        "STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES": form.get("streaming_label_auto_sync_interval", 60),
 
         "SPOTIFY_OUTPUT_DIR": form.get("spotify_output_dir", "").strip(),
         "SPOTIFY_FORMAT": form.get("spotify_format", "mp3"),

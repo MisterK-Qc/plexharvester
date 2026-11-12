@@ -1,21 +1,24 @@
 """
 streaming_label_scheduler.py — Vérification automatique des étiquettes de service streaming.
 
-Tourne dans un thread daemon. À l'heure configurée (STREAMING_LABEL_AUTO_SYNC_TIME),
+Tourne dans un thread daemon. À intervalle régulier (STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES),
 lance le job d'étiquetage sur toutes les bibliothèques films/séries du serveur local.
 
-plex_label_service.py ignore désormais tout item qui porte déjà une étiquette de
-service streaming (posée une fois pour toutes), donc ce job quotidien ne fait
-réellement quelque chose que pour les items nouvellement ajoutés à la bibliothèque.
+plex_label_service.py ignore tout item qui porte déjà une étiquette de service streaming
+(posée une fois pour toutes), donc chaque passage ne fait réellement quelque chose que pour
+les items nouvellement ajoutés à la bibliothèque — un intervalle court (ex. 60 min) permet
+à un nouvel item d'être étiqueté avant le prochain scan Kometa, sans attendre une heure fixe.
 """
 import logging
 import threading
-from datetime import datetime
+import time
 
 logger = logging.getLogger(__name__)
 
 _scheduler_thread: threading.Thread | None = None
 _stop_event = threading.Event()
+
+MIN_INTERVAL_MINUTES = 15  # plancher pour éviter de marteler TMDb/Plex inutilement
 
 
 def start_streaming_label_scheduler(app):
@@ -35,8 +38,8 @@ def start_streaming_label_scheduler(app):
 
 
 def _scheduler_loop(app):
-    last_run_date   = None
-    _heartbeat_tick = 0  # log de présence toutes les ~10 min (20 × 30s)
+    last_run_ts     = 0.0  # time.monotonic() du dernier run réussi (0 = jamais, donc premier passage immédiat)
+    _heartbeat_tick = 0     # log de présence toutes les ~10 min (20 × 30s)
 
     while not _stop_event.is_set():
         try:
@@ -45,12 +48,12 @@ def _scheduler_loop(app):
                 cfg = load_config()
 
                 enabled     = cfg.get("STREAMING_LABEL_AUTO_SYNC", False)
-                sync_time   = str(cfg.get("STREAMING_LABEL_AUTO_SYNC_TIME", "00:00") or "00:00")
+                interval_m  = max(MIN_INTERVAL_MINUTES, int(cfg.get("STREAMING_LABEL_AUTO_SYNC_INTERVAL_MINUTES", 60) or 60))
                 plex_token  = str(cfg.get("PLEX_TOKEN_SCHEDULER", "") or "")
                 api_key     = str(cfg.get("TMDB_API_KEY", "") or "")
 
-                now   = datetime.now()
-                today = now.date()
+                now_ts   = time.monotonic()
+                elapsed  = now_ts - last_run_ts
 
                 # Heartbeat toutes les ~10 minutes
                 _heartbeat_tick += 1
@@ -58,8 +61,8 @@ def _scheduler_loop(app):
                     _heartbeat_tick = 0
                     if enabled and plex_token and api_key:
                         logger.debug(
-                            "[STREAMING LABEL SCHEDULER] Actif — heure configurée : %s, heure actuelle : %02d:%02d",
-                            sync_time, now.hour, now.minute,
+                            "[STREAMING LABEL SCHEDULER] Actif — intervalle : %d min, prochain passage dans ~%d min",
+                            interval_m, max(0, interval_m - int(elapsed // 60)),
                         )
                     elif enabled and not plex_token:
                         logger.warning(
@@ -70,26 +73,14 @@ def _scheduler_loop(app):
                         logger.warning("[STREAMING LABEL SCHEDULER] Activé mais clé API TMDb manquante")
                     # Si disabled : pas de log (comportement attendu)
 
-                if enabled and plex_token and api_key:
+                if enabled and plex_token and api_key and elapsed >= interval_m * 60:
+                    logger.info("[STREAMING LABEL SCHEDULER] Lancement (intervalle %d min atteint)", interval_m)
                     try:
-                        h, m = map(int, sync_time.split(":"))
+                        _run_label_job(plex_token, api_key)
+                        last_run_ts = now_ts
                     except Exception:
-                        logger.warning("[STREAMING LABEL SCHEDULER] Format d'heure invalide : '%s'", sync_time)
-                        h, m = 0, 0
-
-                    if now.hour == h and now.minute == m:
-                        if last_run_date == today:
-                            logger.debug(
-                                "[STREAMING LABEL SCHEDULER] Heure %s atteinte mais déjà exécuté aujourd'hui",
-                                sync_time,
-                            )
-                        else:
-                            last_run_date = today
-                            logger.info("[STREAMING LABEL SCHEDULER] Lancement à %s", sync_time)
-                            try:
-                                _run_label_job(plex_token, api_key)
-                            except Exception:
-                                logger.exception("[STREAMING LABEL SCHEDULER] Erreur")
+                        logger.exception("[STREAMING LABEL SCHEDULER] Erreur")
+                        last_run_ts = now_ts  # évite de boucler en échec serré, on retentera au prochain intervalle
 
         except Exception:
             logger.exception("[STREAMING LABEL SCHEDULER] Erreur dans la boucle principale")
