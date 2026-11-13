@@ -5,11 +5,20 @@ RUN cargo install alass-cli
 # ── Stage 2 : image finale ───────────────────────────────────────────────────
 FROM python:3.12-slim
 
+ARG BUILD_NUMBER=dev
+ARG BUILD_BRANCH=local
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PLEX_COMPARE_CONFIG_DIR=/config \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    BUILD_NUMBER=${BUILD_NUMBER} \
+    BUILD_BRANCH=${BUILD_BRANCH} \
+    GIT_SHA=${GIT_SHA} \
+    BUILD_DATE=${BUILD_DATE}
 
 WORKDIR /app
 
@@ -35,7 +44,11 @@ COPY . .
 LABEL org.opencontainers.image.title="PlexHarvester" \
       org.opencontainers.image.description="Compare Plex libraries, index FTP sources, and harvest missing content with MKV tooling" \
       org.opencontainers.image.version="2.1" \
-      org.opencontainers.image.source="https://github.com/MisterK-Qc/plexharvester"
+      org.opencontainers.image.source="https://github.com/MisterK-Qc/plexharvester" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      io.plexharvester.build-number="${BUILD_NUMBER}" \
+      io.plexharvester.build-branch="${BUILD_BRANCH}"
 
 EXPOSE 5000
 

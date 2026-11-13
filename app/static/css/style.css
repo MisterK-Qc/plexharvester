@@ -71,6 +71,15 @@ body{
   font-weight: 600;
 }
 .main-nav-spacer{ flex: 1; }
+.main-nav-build{
+  align-self: center;
+  color: var(--txt-muted);
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  opacity: 0.65;
+  padding: 0 10px;
+  cursor: default;
+}
 .main-nav-tab.logout{ color: var(--err); }
 .main-nav-tab.logout:hover{ color: #ff6666; }
 .mkv-badge{

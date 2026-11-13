@@ -113,6 +113,29 @@ def create_app():
         return {"t": t}
 
     # ------------------------------------------------------------------
+    # Build info (injecté au build Docker — voir Dockerfile / docker-publish.yml)
+    # ------------------------------------------------------------------
+    build_number = os.environ.get("BUILD_NUMBER", "dev")
+    build_branch = os.environ.get("BUILD_BRANCH", "local")
+    git_sha = os.environ.get("GIT_SHA", "unknown")
+    build_info = {
+        "number": build_number,
+        "branch": build_branch,
+        "sha": git_sha,
+        "sha_short": git_sha[:7] if git_sha != "unknown" else git_sha,
+        "date": os.environ.get("BUILD_DATE", "unknown"),
+        "label": (
+            f"{build_branch}-{build_number}"
+            if build_number != "dev"
+            else "dev"
+        ),
+    }
+
+    @app.context_processor
+    def inject_build_info():
+        return {"build_info": build_info}
+
+    # ------------------------------------------------------------------
     # Filtres / helpers Jinja
     # ------------------------------------------------------------------
     register_filters(app)

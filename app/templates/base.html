@@ -46,6 +46,7 @@
     {{ t("nav.server") }}
   </a>
   <span class="main-nav-spacer"></span>
+  <span class="main-nav-build" title="branche {{ build_info.branch }} · commit {{ build_info.sha_short }} · {{ build_info.date }}">{{ build_info.label }}</span>
   <a href="{{ url_for('auth.logout') }}" class="main-nav-tab logout">{{ t("nav.logout") }}</a>
 </nav>
 
